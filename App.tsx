@@ -5,7 +5,7 @@ import { generateAdContent, generateAIImage } from './services/geminiService';
 
 const APP_NAME = "Long Thanh Đào Luxury";
 const APP_SLOGAN = "Chuyên Gia Content AI Triệu View";
-const VERSION = "2.0.2"; 
+const VERSION = "2.0.5"; 
 
 const WRITING_STYLES = [
   { id: 'pro', name: 'Sang trọng & Chuyên nghiệp', description: 'Ngôn từ đẳng cấp, lịch sự' },
@@ -25,12 +25,13 @@ const LOADING_STEPS = [
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'home' | 'history'>('home');
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
+  const [showKeyWarning, setShowKeyWarning] = useState<boolean>(false);
   const [progress, setProgress] = useState<number>(0);
   const [loadingText, setLoadingText] = useState<string>("");
   const [theme, setTheme] = useState<'dark' | 'light'>(() => (localStorage.getItem('ltd_theme') as 'dark' | 'light') || 'dark');
   
   const [userPrompt, setUserPrompt] = useState<string>("");
-  const [selectedStyle, setSelectedStyle] = useState<string>(WRITING_STYLES[1].name); // Mặc định là Mặn mòi
+  const [selectedStyle, setSelectedStyle] = useState<string>(WRITING_STYLES[1].name);
 
   const [bannerImage, setBannerImage] = useState<string>(() => localStorage.getItem('ltd_banner') || "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=2000&auto=format&fit=crop");
   const [bannerHeight, setBannerHeight] = useState<number>(() => parseInt(localStorage.getItem('ltd_banner_height') || '256'));
@@ -118,7 +119,7 @@ const App: React.FC = () => {
     } catch (err: any) {
       console.error(err);
       if (err.message === "MISSING_API_KEY") {
-        alert("LỖI: Chưa cấu hình API_KEY! Bác hãy vào Vercel Settings -> Environment Variables, thêm biến API_KEY nhé.");
+        setShowKeyWarning(true);
       } else {
         alert("AI đang bị 'say lúa' hoặc nghẽn mạng. Bác thử lại lần nữa nhé!");
       }
@@ -129,6 +130,33 @@ const App: React.FC = () => {
   };
 
   const isDark = theme === 'dark';
+
+  const KeyWarningModal = () => (
+    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/90 backdrop-blur-xl p-4 md:p-10">
+      <div className="w-full max-w-2xl bg-[#0a0a0a] border border-red-500/30 rounded-[3rem] p-8 md:p-12 shadow-2xl space-y-8 animate-fadeIn">
+        <div className="w-20 h-20 bg-red-500/20 rounded-full flex items-center justify-center mx-auto text-red-500">
+          <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+        </div>
+        <div className="text-center space-y-4">
+          <h2 className="text-2xl md:text-3xl font-black text-white uppercase tracking-tighter">Bác đã thêm Key nhưng chưa kích hoạt!</h2>
+          <p className="text-slate-400 text-sm md:text-base leading-relaxed">
+            Key đã nằm trong Vercel rồi. Bây giờ bác chỉ cần thực hiện bước cuối cùng này thôi.
+          </p>
+        </div>
+        <div className="bg-white/5 rounded-2xl p-6 space-y-3 border border-white/5 text-left">
+          <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest text-center mb-2">Bước cuối cùng (Cực quan trọng):</p>
+          <ul className="text-xs text-slate-300 space-y-4 list-decimal list-inside">
+            <li>Vào tab <b>Deployments</b> (Triển khai) trên Vercel.</li>
+            <li>Tìm bản cập nhật mới nhất ở trên cùng (chỗ bác vừa thấy lỗi đỏ).</li>
+            <li>Bấm vào dấu <b>3 chấm (...)</b> bên phải bản đó.</li>
+            <li>Chọn <b>Redeploy</b> (Triển khai lại).</li>
+            <li>Đợi nó chạy xong 100% là máy sẽ tự nạp mã API mới bác vừa lưu!</li>
+          </ul>
+        </div>
+        <button onClick={() => setShowKeyWarning(false)} className="w-full py-5 bg-indigo-600 text-white rounded-2xl font-black text-sm uppercase tracking-widest hover:bg-indigo-500 transition-colors shadow-xl shadow-indigo-600/20">OK, ĐỂ EM ĐI REDEPLOY LẦN CUỐI!</button>
+      </div>
+    </div>
+  );
 
   const LoadingOverlay = () => (
     <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-black/95 backdrop-blur-3xl animate-fadeIn p-8">
@@ -161,6 +189,7 @@ const App: React.FC = () => {
     <div className={`min-h-screen transition-colors duration-500 flex flex-col lg:flex-row overflow-hidden font-['Plus_Jakarta_Sans'] ${isDark ? 'bg-[#050505] text-slate-200' : 'bg-slate-50 text-slate-900'}`}>
       
       {isGenerating && <LoadingOverlay />}
+      {showKeyWarning && <KeyWarningModal />}
 
       {/* Sidebar Desktop */}
       <aside className={`hidden lg:flex w-72 border-r flex-col p-8 space-y-10 z-50 transition-colors ${isDark ? 'bg-[#0a0a0a] border-white/5' : 'bg-white border-slate-200 shadow-xl'}`}>
@@ -188,9 +217,9 @@ const App: React.FC = () => {
       <main className="flex-1 overflow-y-auto relative pb-28 lg:pb-10 custom-scrollbar">
         {/* Banner */}
         <div className="relative w-full cursor-pointer group overflow-hidden transition-all duration-500 shadow-2xl" style={{ height: `${bannerHeight}px` }}>
-          <img src={bannerImage} className="w-full h-full object-cover brightness-[0.3] transition-transform duration-[2s] group-hover:scale-110" alt="Banner" />
+          <img src={bannerImage} className="w-full h-full object-cover brightness-[0.3] transition-transform duration-[2s] group-hover:scale-110" alt="Banner" style={{ imageRendering: 'auto' }} />
           <div className={`absolute inset-0 bg-gradient-to-t ${isDark ? 'from-[#050505]' : 'from-slate-50'} to-transparent opacity-80`}></div>
-          <div className="absolute bottom-6 left-6 md:left-12">
+          <div className="absolute bottom-6 left-6 md:left-12 text-shadow-lg">
             <h2 className="text-3xl md:text-6xl font-black tracking-tighter text-white">{APP_NAME}</h2>
             <p className="text-indigo-400 font-black text-[9px] md:text-[11px] uppercase tracking-[0.4em] mt-2">{APP_SLOGAN}</p>
           </div>
@@ -233,7 +262,7 @@ const App: React.FC = () => {
                 </div>
                 <div className="flex items-center gap-6">
                   <div onClick={() => logoInputRef.current?.click()} className={`w-16 h-16 rounded-full border-2 border-dashed flex items-center justify-center cursor-pointer overflow-hidden shadow-lg ${isDark ? 'bg-white/5 border-white/10 hover:border-indigo-500' : 'bg-slate-50 border-slate-200 hover:border-indigo-500'}`}>
-                    {logoImage ? <img src={logoImage} className="w-full h-full object-cover" /> : <span className="text-xl">+</span>}
+                    {logoImage ? <img src={logoImage} className="w-full h-full object-cover" style={{ imageRendering: 'auto' }} /> : <span className="text-xl">+</span>}
                   </div>
                   <div className="flex-1">
                     <div className="flex justify-between text-[9px] font-black text-slate-500 mb-2 uppercase tracking-widest">
@@ -280,7 +309,7 @@ const App: React.FC = () => {
                 <span className="w-1 h-4 bg-indigo-500 rounded-full"></span> ẢNH QUẢNG CÁO
               </h3>
               <div onClick={() => fileInputRef.current?.click()} className={`relative aspect-video rounded-2xl border-2 border-dashed flex flex-col items-center justify-center cursor-pointer overflow-hidden transition-all ${isDark ? 'bg-white/5 border-white/10 hover:border-indigo-500' : 'bg-slate-50 border-slate-200 hover:border-indigo-500'}`}>
-                {productImage ? <img src={productImage} className="w-full h-full object-cover" /> : (
+                {productImage ? <img src={productImage} className="w-full h-full object-cover" style={{ imageRendering: 'auto' }} /> : (
                   <div className="text-center opacity-20">
                     <svg className="w-10 h-10 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4"/></svg>
                     <p className="text-[10px] font-black uppercase tracking-widest">Tải Ảnh Sản Phẩm</p>
@@ -296,29 +325,62 @@ const App: React.FC = () => {
 
           <div id="results-section" className="xl:col-span-7 space-y-8">
              {/* Preview Card */}
-             <div className={`p-4 rounded-[2.5rem] shadow-2xl relative ${isDark ? 'glass' : 'bg-white border border-slate-100'}`}>
-              <div className="absolute top-8 left-8 z-10 bg-black/50 backdrop-blur-xl px-4 py-2 rounded-xl border border-white/10 text-[10px] font-black text-white uppercase tracking-widest flex items-center gap-2">
-                <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span> PREVIEW BÀI ĐĂNG
+             <div className={`p-3 md:p-4 rounded-[2.5rem] shadow-2xl relative ${isDark ? 'glass' : 'bg-white border border-slate-100'}`}>
+              <div className="absolute top-8 left-8 z-20 bg-black/60 backdrop-blur-xl px-4 py-2 rounded-xl border border-white/10 text-[10px] font-black text-white uppercase tracking-widest flex items-center gap-2 shadow-lg">
+                <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span> BẢN NHÁY QUẢNG CÁO
               </div>
-              <div className="relative aspect-square rounded-[2rem] overflow-hidden bg-black shadow-inner">
+              
+              <div className="relative aspect-square rounded-[2rem] overflow-hidden bg-[#0a0a0a] shadow-inner ring-1 ring-white/5">
                 {productImage ? (
                   <>
-                    <img src={productImage} className="w-full h-full object-cover" />
+                    <img 
+                      src={productImage} 
+                      className="w-full h-full object-cover select-none" 
+                      style={{ 
+                        imageRendering: 'auto',
+                        WebkitBackfaceVisibility: 'hidden',
+                        backfaceVisibility: 'hidden'
+                      }} 
+                      alt="Ad Preview" 
+                    />
+                    
                     {logoImage && (
-                      <div className="absolute top-6 right-6 w-20 h-20 md:w-28 md:h-28 rounded-full overflow-hidden border-4 border-white/20 shadow-2xl" style={{ opacity: logoOpacity }}>
-                        <img src={logoImage} className="w-full h-full object-cover" />
+                      <div 
+                        className="absolute top-6 right-6 w-24 h-24 md:w-32 md:h-32 rounded-full overflow-hidden border-[6px] border-white/10 backdrop-blur-sm shadow-[0_20px_50px_rgba(0,0,0,0.5)] transition-all transform hover:scale-105" 
+                        style={{ 
+                          opacity: logoOpacity,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center'
+                        }}
+                      >
+                        <img 
+                          src={logoImage} 
+                          className="w-full h-full object-cover" 
+                          style={{ imageRendering: 'auto' }}
+                          alt="Logo"
+                        />
                       </div>
                     )}
-                    <div className="absolute bottom-6 left-6 right-6 glass p-6 rounded-3xl border-white/10">
-                      <p className="text-[10px] text-indigo-400 font-black uppercase tracking-widest mb-1">{companyInfo.name}</p>
-                      <p className="text-white text-2xl md:text-3xl font-black tracking-tight">{companyInfo.hotline}</p>
-                      <p className="text-white/40 text-[9px] md:text-[11px] mt-1 uppercase font-bold tracking-wider">{companyInfo.address}</p>
+                    
+                    <div className="absolute bottom-6 left-6 right-6 p-6 rounded-3xl border border-white/10 shadow-2xl overflow-hidden">
+                      <div className="absolute inset-0 bg-black/40 backdrop-blur-md -z-10"></div>
+                      <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/10 to-transparent -z-10"></div>
+                      
+                      <div className="relative flex flex-col items-start gap-1">
+                        <span className="text-[10px] text-indigo-400 font-black uppercase tracking-[0.2em] opacity-90">{companyInfo.name}</span>
+                        <h4 className="text-white text-3xl md:text-4xl font-black tracking-tighter leading-none">{companyInfo.hotline}</h4>
+                        <div className="flex items-center gap-2 mt-2 opacity-50">
+                          <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                          <p className="text-white text-[9px] md:text-[10px] uppercase font-black tracking-widest line-clamp-1">{companyInfo.address}</p>
+                        </div>
+                      </div>
                     </div>
                   </>
                 ) : (
-                  <div className="h-full flex flex-col items-center justify-center opacity-10 p-10 text-center">
+                  <div className="h-full flex flex-col items-center justify-center opacity-10 p-10 text-center animate-pulse">
                      <svg className="w-24 h-24 mb-6" fill="currentColor" viewBox="0 0 24 24"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg>
-                     <p className="font-black text-sm uppercase tracking-[0.4em]">Đang đợi bác ra lệnh...</p>
+                     <p className="font-black text-sm uppercase tracking-[0.4em]">Đang đợi bác lên ý tưởng...</p>
                   </div>
                 )}
               </div>
