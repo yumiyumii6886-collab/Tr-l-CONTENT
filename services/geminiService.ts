@@ -2,59 +2,105 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { CompanyInfo, AdContent } from "../types";
 
-export const generateAdContent = async (
-  productImageBase64: string,
-  companyInfo: CompanyInfo
-): Promise<AdContent> => {
-  // Khởi tạo AI trực tiếp với biến môi trường từ Vercel
-  // Lưu ý: Key phải được đặt tên chính xác là API_KEY trong phần Environment Variables của Vercel
-  const apiKey = (import.meta as any).env?.VITE_API_KEY || (process as any).env?.API_KEY;
-  
+// Hàm khởi tạo AI Client ngay lúc cần để đảm bảo lấy được API_KEY mới nhất từ process.env
+const getAIClient = () => {
+  const apiKey = process.env.API_KEY;
   if (!apiKey) {
-    throw new Error("API Key chưa được cấu hình trên Vercel!");
+    throw new Error("MISSING_API_KEY");
   }
+  return new GoogleGenAI({ apiKey });
+};
 
-  const ai = new GoogleGenAI({ apiKey });
-  const model = 'gemini-3-flash-preview';
-  
-  const prompt = `
-    Bạn là một chuyên gia viết nội dung quảng cáo (Content Creator) hàng đầu tại Việt Nam.
-    Hãy phân tích hình ảnh sản phẩm đính kèm và tạo một bài viết quảng cáo hấp dẫn.
-    
-    Thông tin thương hiệu:
-    - Tên công ty: ${companyInfo.name}
-    - Hotline: ${companyInfo.hotline}
-    - Địa chỉ: ${companyInfo.address}
-    
-    Yêu cầu:
-    1. Tiêu đề (headline) hấp dẫn, kích thích mua hàng.
-    2. Nội dung (body) sáng tạo, nhấn mạnh vào giá trị sản phẩm dựa trên hình ảnh.
-    3. Hashtags phù hợp xu hướng.
-  `;
+export const generateAIImage = async (prompt: string): Promise<string> => {
+  try {
+    const ai = getAIClient();
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash-image',
+      contents: {
+        parts: [{ text: `Commercial photography of ${prompt}, high-end studio lighting, 8k, professional product shot, minimalist background, no text.` }],
+      },
+      config: { imageConfig: { aspectRatio: "1:1" } },
+    });
 
-  const imagePart = {
-    inlineData: {
-      mimeType: "image/jpeg",
-      data: productImageBase64.split(",")[1],
-    },
-  };
-
-  const response = await ai.models.generateContent({
-    model,
-    contents: { parts: [imagePart, { text: prompt }] },
-    config: {
-      responseMimeType: "application/json",
-      responseSchema: {
-        type: Type.OBJECT,
-        properties: {
-          headline: { type: Type.STRING },
-          body: { type: Type.STRING },
-          hashtags: { type: Type.ARRAY, items: { type: Type.STRING } }
-        },
-        required: ["headline", "body", "hashtags"]
+    const parts = response.candidates?.[0]?.content?.parts;
+    if (parts) {
+      for (const part of parts) {
+        if (part.inlineData) return `data:image/png;base64,${part.inlineData.data}`;
       }
     }
-  });
+    throw new Error("NO_IMAGE_DATA");
+  } catch (error) {
+    console.error("Image Generation Error:", error);
+    throw error;
+  }
+};
 
-  return JSON.parse(response.text);
+export const generateAdContent = async (
+  productImageBase64: string,
+  companyInfo: CompanyInfo,
+  style: string,
+  userPrompt: string
+): Promise<AdContent> => {
+  try {
+    const ai = getAIClient();
+    const isFunny = style.includes("Mặn mòi");
+    
+    // Hệ thống prompt được "vắt muối" tối đa cho phong cách Mặn mòi
+    const systemInstruction = isFunny 
+      ? `Bạn là một "Thánh Content" mặn mòi, lầy lội, chuyên sử dụng ngôn ngữ Gen Z (ét ô ét, flex, mãi mận, keo lỳ, tâm linh, người chơi hệ...). 
+         Cách viết: Dùng thơ chế, so sánh sản phẩm với những thứ khó đỡ (người yêu cũ, bữa lẩu, sổ hộ nghèo...), thả thính cực dính. 
+         Mục tiêu: Đọc xong khách phải cười xỉu và chốt đơn vì sự duyên dáng.`
+      : `Bạn là chuyên gia Content Marketing chuyên nghiệp, lịch sự, tập trung vào giá trị và niềm tin.`;
+
+    const prompt = `
+      Hãy viết bài quảng cáo cho: ${userPrompt}
+      Thương hiệu: ${companyInfo.name} | Hotline: ${companyInfo.hotline} | Địa chỉ: ${companyInfo.address}
+      Phong cách yêu cầu: ${style}.
+      
+      Yêu cầu trình bày:
+      - Tiêu đề (headline) phải cực kỳ gây sốc và thu hút.
+      - Nội dung (body) ngắt dòng hợp lý, sử dụng icon phù hợp.
+      - Sử dụng dấu ● ở đầu các dòng đặc điểm nổi bật.
+      
+      TRẢ VỀ ĐỊNH DẠNG JSON CHÍNH XÁC:
+      {
+        "headline": "Tiêu đề ấn tượng",
+        "body": "Nội dung bài viết",
+        "hashtags": ["tag1", "tag2", "tag3"]
+      }
+    `;
+
+    const parts: any[] = [{ text: prompt }];
+    if (productImageBase64) {
+      parts.push({
+        inlineData: {
+          mimeType: "image/jpeg",
+          data: productImageBase64.split(",")[1],
+        },
+      });
+    }
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-3-flash-preview',
+      contents: { parts },
+      config: {
+        systemInstruction,
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            headline: { type: Type.STRING },
+            body: { type: Type.STRING },
+            hashtags: { type: Type.ARRAY, items: { type: Type.STRING } }
+          },
+          required: ["headline", "body", "hashtags"]
+        }
+      }
+    });
+
+    return JSON.parse(response.text || "{}");
+  } catch (error) {
+    console.error("Content Generation Error:", error);
+    throw error;
+  }
 };
