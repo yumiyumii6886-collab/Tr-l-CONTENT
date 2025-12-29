@@ -5,7 +5,7 @@ import { generateAdContent, generateAIImage } from './services/geminiService';
 
 const APP_NAME = "Long Thanh Đào Luxury";
 const APP_SLOGAN = "Chuyên Gia Content AI Triệu View";
-const VERSION = "2.0.5"; 
+const VERSION = "2.0.6"; 
 
 const WRITING_STYLES = [
   { id: 'pro', name: 'Sang trọng & Chuyên nghiệp', description: 'Ngôn từ đẳng cấp, lịch sự' },
@@ -129,6 +129,11 @@ const App: React.FC = () => {
     }
   };
 
+  const handleReload = () => {
+    // Ép trình duyệt tải lại trang mới hoàn toàn, bỏ qua cache
+    window.location.reload();
+  };
+
   const isDark = theme === 'dark';
 
   const KeyWarningModal = () => (
@@ -138,22 +143,23 @@ const App: React.FC = () => {
           <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
         </div>
         <div className="text-center space-y-4">
-          <h2 className="text-2xl md:text-3xl font-black text-white uppercase tracking-tighter">Bác đã thêm Key nhưng chưa kích hoạt!</h2>
+          <h2 className="text-2xl md:text-3xl font-black text-white uppercase tracking-tighter">ĐIỆN THOẠI ĐANG BỊ LƯU BẢN CŨ!</h2>
           <p className="text-slate-400 text-sm md:text-base leading-relaxed">
-            Key đã nằm trong Vercel rồi. Bây giờ bác chỉ cần thực hiện bước cuối cùng này thôi.
+            Trên máy tính bác đã Redeploy thành công rồi, nhưng điện thoại nó vẫn nhớ cái lỗi lúc nãy.
           </p>
         </div>
         <div className="bg-white/5 rounded-2xl p-6 space-y-3 border border-white/5 text-left">
-          <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest text-center mb-2">Bước cuối cùng (Cực quan trọng):</p>
+          <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest text-center mb-2">Để kích hoạt trên điện thoại:</p>
           <ul className="text-xs text-slate-300 space-y-4 list-decimal list-inside">
-            <li>Vào tab <b>Deployments</b> (Triển khai) trên Vercel.</li>
-            <li>Tìm bản cập nhật mới nhất ở trên cùng (chỗ bác vừa thấy lỗi đỏ).</li>
-            <li>Bấm vào dấu <b>3 chấm (...)</b> bên phải bản đó.</li>
-            <li>Chọn <b>Redeploy</b> (Triển khai lại).</li>
-            <li>Đợi nó chạy xong 100% là máy sẽ tự nạp mã API mới bác vừa lưu!</li>
+            <li>Bấm cái nút xanh to đùng bên dưới để bác ép máy tải lại trang mới.</li>
+            <li>Nếu vẫn hiện bảng này, hãy <b>đóng hẳn Safari/Chrome</b> rồi vào lại link nhé.</li>
+            <li>Kiểm tra góc trái màn hình, nếu thấy chữ <b>v2.0.6</b> là đã thành công!</li>
           </ul>
         </div>
-        <button onClick={() => setShowKeyWarning(false)} className="w-full py-5 bg-indigo-600 text-white rounded-2xl font-black text-sm uppercase tracking-widest hover:bg-indigo-500 transition-colors shadow-xl shadow-indigo-600/20">OK, ĐỂ EM ĐI REDEPLOY LẦN CUỐI!</button>
+        <div className="flex flex-col gap-3">
+          <button onClick={handleReload} className="w-full py-5 bg-indigo-600 text-white rounded-2xl font-black text-sm uppercase tracking-widest hover:bg-indigo-500 transition-colors shadow-xl shadow-indigo-600/20">XÁC NHẬN ĐÃ REDEPLOY & TẢI LẠI TRANG</button>
+          <button onClick={() => setShowKeyWarning(false)} className="w-full py-3 text-slate-500 text-[10px] font-black uppercase tracking-widest hover:text-white transition-colors">Để em kiểm tra lại lần nữa</button>
+        </div>
       </div>
     </div>
   );
