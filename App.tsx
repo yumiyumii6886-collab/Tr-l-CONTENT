@@ -3,9 +3,9 @@ import React, { useState, useRef, useEffect } from 'react';
 import { CompanyInfo, AdContent, HistoryItem } from './types';
 import { generateAdContent, generateAIImage } from './services/geminiService';
 
-const APP_NAME = "Long Thanh Đào Luxury";
+const APP_NAME = "Long Thanh Đào";
 const APP_SLOGAN = "Chuyên Gia Content AI Triệu View";
-const VERSION = "2.0.7"; 
+const VERSION = "2.1.7"; 
 
 const WRITING_STYLES = [
   { id: 'pro', name: 'Sang trọng & Chuyên nghiệp', description: 'Ngôn từ đẳng cấp, lịch sự' },
@@ -15,19 +15,27 @@ const WRITING_STYLES = [
 ];
 
 const LOADING_STEPS = [
-  "Đang pha muối vào Content...",
-  "AI đang vận công viết lách...",
-  "Đang 'vẩy' thêm icon lầy lội...",
-  "Tối ưu hóa khả năng chốt đơn...",
-  "Xong rồi! Check hàng thôi anh em!"
+  { main: "Thiết lập máy chủ AI...", sub: "Đang kết nối tới trung tâm xử lý Long Thanh Đào v2.1.7" },
+  { main: "Phân tích sản phẩm...", sub: "Đang trích xuất đặc tính nổi bật từ hình ảnh" },
+  { main: "Dát vàng ngôn từ...", sub: "Đang tinh chỉnh bộ từ vựng Premium cho kiệt tác" },
+  { main: "Tối ưu hóa chuyển đổi...", sub: "Đang lập trình các điểm nhấn thu hút khách hàng" },
+  { main: "Đang đóng gói kiệt tác...", sub: "Chuẩn bị ra mắt nội dung triệu view" }
+];
+
+const TECHNICAL_LOGS = [
+  "Kết nối thần kinh... [OK]",
+  "Quét đặc điểm hình ảnh... [XONG]",
+  "Khớp xu hướng thị trường... [100%]",
+  "Điều chỉnh tông giọng: Cao cấp... [KÍCH HOẠT]",
+  "Loại bỏ văn bản rác... [THÀNH CÔNG]"
 ];
 
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'home' | 'history'>('home');
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
-  const [showKeyWarning, setShowKeyWarning] = useState<boolean>(false);
   const [progress, setProgress] = useState<number>(0);
-  const [loadingText, setLoadingText] = useState<string>("");
+  const [loadingText, setLoadingText] = useState({ main: "", sub: "" });
+  const [currentLogs, setCurrentLogs] = useState<string[]>([]);
   const [theme, setTheme] = useState<'dark' | 'light'>(() => (localStorage.getItem('ltd_theme') as 'dark' | 'light') || 'dark');
   
   const [userPrompt, setUserPrompt] = useState<string>("");
@@ -38,7 +46,7 @@ const App: React.FC = () => {
   const [companyInfo, setCompanyInfo] = useState<CompanyInfo>(() => {
     const saved = localStorage.getItem('long_thanh_dao_info');
     return saved ? JSON.parse(saved) : { 
-      name: 'Long Thanh Đào Luxury', 
+      name: 'Long Thanh Đào', 
       hotline: '088642345', 
       address: '217 Hoàng Quốc Việt, Lào Cai' 
     };
@@ -64,11 +72,8 @@ const App: React.FC = () => {
     localStorage.setItem('ltd_theme', theme);
     localStorage.setItem('ltd_logo_opacity', logoOpacity.toString());
     if (logoImage) localStorage.setItem('ltd_logo', logoImage);
+    document.body.className = theme;
   }, [companyInfo, bannerImage, bannerHeight, logoImage, theme, logoOpacity]);
-
-  useEffect(() => {
-    localStorage.setItem('long_thanh_dao_history', JSON.stringify(history));
-  }, [history]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, setter: (val: string | null) => void) => {
     const file = e.target.files?.[0];
@@ -80,19 +85,27 @@ const App: React.FC = () => {
   };
 
   const handleGenerate = async () => {
-    if (!productImage && !userPrompt) return alert("Bác phải cho AI biết sản phẩm là gì chứ? Tải ảnh hoặc viết mô tả đi ạ!");
+    if (!productImage && !userPrompt) return alert("Bác chưa cung cấp thông tin sản phẩm!");
     
     setIsGenerating(true);
     setProgress(0);
+    setCurrentLogs([]);
     
     const progressInterval = setInterval(() => {
       setProgress(prev => {
-        const step = Math.floor(prev / 20);
-        setLoadingText(LOADING_STEPS[Math.min(step, LOADING_STEPS.length - 1)]);
-        if (prev >= 96) return prev;
-        return prev + Math.random() * 8;
+        const next = prev + Math.random() * 6;
+        const stepIndex = Math.floor((next / 100) * LOADING_STEPS.length);
+        setLoadingText(LOADING_STEPS[Math.min(stepIndex, LOADING_STEPS.length - 1)]);
+        
+        if (Math.random() > 0.7 && next < 95) {
+          const log = TECHNICAL_LOGS[Math.floor(Math.random() * TECHNICAL_LOGS.length)];
+          setCurrentLogs(prevLogs => [log, ...prevLogs.slice(0, 3)]);
+        }
+
+        if (next >= 98) return 98;
+        return next;
       });
-    }, 300);
+    }, 350);
 
     try {
       let finalImage = productImage;
@@ -102,6 +115,7 @@ const App: React.FC = () => {
       }
 
       const content = await generateAdContent(finalImage!, companyInfo, selectedStyle, userPrompt);
+      await new Promise(r => setTimeout(r, 1200));
       setGeneratedContent(content);
       
       const newItem: HistoryItem = {
@@ -118,322 +132,285 @@ const App: React.FC = () => {
       }, 500);
     } catch (err: any) {
       console.error(err);
-      if (err.message === "MISSING_API_KEY") {
-        setShowKeyWarning(true);
-      } else {
-        alert("AI đang bị 'say lúa' hoặc nghẽn mạng. Bác thử lại lần nữa nhé!");
-      }
+      alert("AI đang bận dát vàng kiệt tác khác. Thử lại sau 1 lát nhé!");
     } finally {
       clearInterval(progressInterval);
       setTimeout(() => setIsGenerating(false), 800);
     }
   };
 
-  const handleReload = () => {
-    window.location.href = window.location.href + '?t=' + Date.now();
-  };
+  const LuxuryLogoIcon = () => (
+    <div className="relative w-16 h-16 flex items-center justify-center scale-90 md:scale-100">
+      <div className="absolute inset-0 bg-yellow-600 rounded-full blur-xl opacity-20"></div>
+      <svg className="absolute w-full h-full animate-spin-slow opacity-60" viewBox="0 0 100 100">
+        <circle cx="50" cy="50" r="48" fill="none" stroke="#EAB308" strokeWidth="0.5" strokeDasharray="4 2" />
+        <circle cx="50" cy="50" r="42" fill="none" stroke="#EAB308" strokeWidth="1" strokeDasharray="1 3" />
+      </svg>
+      <div className="relative w-12 h-12 bg-gradient-to-br from-[#111] via-[#000] to-[#222] rounded-full flex items-center justify-center border-2 border-yellow-500/50 shadow-[0_0_20px_rgba(234,179,8,0.3)] overflow-hidden">
+        <div className="flex items-baseline z-10 font-black italic">
+          <span className="text-xl bg-gradient-to-b from-yellow-100 via-yellow-400 to-yellow-600 bg-clip-text text-transparent drop-shadow-md">T</span>
+          <span className="text-[10px] bg-gradient-to-b from-yellow-100 via-yellow-400 to-yellow-600 bg-clip-text text-transparent drop-shadow-md -ml-0.5">L</span>
+        </div>
+      </div>
+    </div>
+  );
 
   const isDark = theme === 'dark';
 
-  const KeyWarningModal = () => (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/90 backdrop-blur-xl p-4 md:p-10">
-      <div className="w-full max-w-2xl bg-[#0a0a0a] border border-red-500/30 rounded-[3rem] p-8 md:p-12 shadow-2xl space-y-8 animate-fadeIn">
-        <div className="w-20 h-20 bg-red-500/20 rounded-full flex items-center justify-center mx-auto text-red-500">
-          <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
-        </div>
-        <div className="text-center space-y-4">
-          <h2 className="text-2xl md:text-3xl font-black text-white uppercase tracking-tighter">CẤU HÌNH ĐÃ XONG - CHỜ KÍCH HOẠT!</h2>
-          <p className="text-slate-400 text-sm md:text-base leading-relaxed">
-            Tôi đã sửa lại bộ lọc bảo mật để điện thoại có thể đọc được Key của bác.
-          </p>
-        </div>
-        <div className="bg-white/5 rounded-2xl p-6 space-y-3 border border-white/5 text-left">
-          <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest text-center mb-2">Cách dứt điểm lỗi này:</p>
-          <ul className="text-xs text-slate-300 space-y-4 list-decimal list-inside">
-            <li>Bác hãy **Redeploy** bản v2.0.7 này trên Vercel.</li>
-            <li>Sau đó trên điện thoại, bác **mở Tab ẩn danh** (Incognito) để vào web.</li>
-            <li>Nếu thấy chữ **v2.0.7** ở góc là AI sẽ chạy mượt ngay!</li>
-          </ul>
-        </div>
-        <div className="flex flex-col gap-3">
-          <button onClick={handleReload} className="w-full py-5 bg-indigo-600 text-white rounded-2xl font-black text-sm uppercase tracking-widest hover:bg-indigo-500 transition-colors shadow-xl shadow-indigo-600/20">ÉP TẢI LẠI TRANG NGAY</button>
-          <button onClick={() => setShowKeyWarning(false)} className="w-full py-3 text-slate-500 text-[10px] font-black uppercase tracking-widest hover:text-white transition-colors">Để em kiểm tra lại lần cuối</button>
-        </div>
-      </div>
-    </div>
-  );
-
-  const LoadingOverlay = () => (
-    <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-black/95 backdrop-blur-3xl animate-fadeIn p-8">
-      <div className="w-full max-w-sm text-center space-y-8">
-        <div className="relative w-32 h-32 mx-auto">
-          <svg className="w-full h-full -rotate-90">
-            <circle cx="64" cy="64" r="60" stroke="currentColor" strokeWidth="8" fill="transparent" className="text-white/5" />
-            <circle cx="64" cy="64" r="60" stroke="currentColor" strokeWidth="8" fill="transparent" 
-              className="text-indigo-500 transition-all duration-300 ease-out"
-              strokeDasharray={377}
-              strokeDashoffset={377 - (377 * progress) / 100}
-              strokeLinecap="round"
-            />
-          </svg>
-          <div className="absolute inset-0 flex items-center justify-center">
-            <span className="text-3xl font-black text-white">{Math.round(progress)}%</span>
-          </div>
-        </div>
-        <div className="space-y-2">
-          <h2 className="text-xl font-black text-white uppercase tracking-tight">{loadingText}</h2>
-          <div className="w-full h-1 bg-white/5 rounded-full overflow-hidden">
-            <div className="h-full bg-indigo-600 transition-all duration-300" style={{ width: `${progress}%` }}></div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-
   return (
-    <div className={`min-h-screen transition-colors duration-500 flex flex-col lg:flex-row overflow-hidden font-['Plus_Jakarta_Sans'] ${isDark ? 'bg-[#050505] text-slate-200' : 'bg-slate-50 text-slate-900'}`}>
+    <div className={`min-h-screen transition-colors duration-700 flex flex-col lg:flex-row overflow-hidden font-['Plus_Jakarta_Sans'] ${isDark ? 'bg-[#050505] text-slate-200' : 'bg-slate-50 text-slate-900'}`}>
       
-      {isGenerating && <LoadingOverlay />}
-      {showKeyWarning && <KeyWarningModal />}
+      {/* Nền xám trang trí */}
+      <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden select-none">
+        <div className="absolute top-0 right-0 w-[800px] h-[800px] opacity-10 filter blur-[80px]">
+          <div className="w-full h-full bg-yellow-500/20 rounded-full"></div>
+        </div>
+        <div className="absolute -bottom-20 -left-20 w-[600px] h-[600px] opacity-[0.05]">
+          <svg viewBox="0 0 200 200" className="w-full h-full">
+            {[...Array(15)].map((_, i) => (
+              <circle key={i} cx="100" cy="100" r={20 + i * 10} fill="none" stroke={isDark ? "#fff" : "#000"} strokeWidth="0.2" />
+            ))}
+          </svg>
+        </div>
+      </div>
 
-      {/* Sidebar Desktop */}
-      <aside className={`hidden lg:flex w-72 border-r flex-col p-8 space-y-10 z-50 transition-colors ${isDark ? 'bg-[#0a0a0a] border-white/5' : 'bg-white border-slate-200 shadow-xl'}`}>
-        <div className="flex items-center gap-4 px-2">
-          <div className="w-12 h-12 bg-indigo-600 rounded-2xl flex items-center justify-center font-black text-white text-xl shadow-xl shadow-indigo-500/20">L</div>
-          <div>
-            <h1 className="text-base font-black tracking-tighter uppercase">Long Thanh</h1>
-            <p className="text-[9px] text-slate-500 font-black uppercase tracking-widest">v{VERSION}</p>
+      {/* MÀN HÌNH CHỜ LUXURY */}
+      {isGenerating && (
+        <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-black/98 backdrop-blur-3xl animate-fadeIn p-8">
+          <div className="w-full max-w-lg text-center space-y-12">
+            <div className="relative w-48 h-48 mx-auto">
+              <svg className="w-full h-full -rotate-90 drop-shadow-[0_0_15px_rgba(234,179,8,0.4)]">
+                <circle cx="96" cy="96" r="80" stroke="rgba(255,255,255,0.05)" strokeWidth="2" fill="transparent" />
+                <circle cx="96" cy="96" r="80" stroke="#EAB308" strokeWidth="6" fill="transparent" 
+                  className="transition-all duration-500 ease-out"
+                  strokeDasharray={502}
+                  strokeDashoffset={502 - (502 * progress) / 100}
+                  strokeLinecap="round"
+                />
+              </svg>
+              <div className="absolute inset-0 flex flex-col items-center justify-center">
+                <span className="text-5xl font-black text-white italic tracking-tighter">{Math.round(progress)}%</span>
+                <span className="text-[10px] font-black text-yellow-500 uppercase tracking-widest mt-2">Dát vàng</span>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <h2 className="text-2xl font-black text-white uppercase tracking-tighter italic bg-gradient-to-r from-yellow-200 via-white to-yellow-600 bg-clip-text text-transparent">
+                {loadingText.main || "Đang khởi tạo..."}
+              </h2>
+              <p className="text-slate-400 text-[10px] uppercase font-bold tracking-[0.3em] h-4">
+                {loadingText.sub}
+              </p>
+              
+              <div className="w-full h-1 bg-white/5 rounded-full overflow-hidden mt-6">
+                <div 
+                  className="h-full metallic-gold-btn shadow-[0_0_15px_rgba(234,179,8,0.5)] transition-all duration-700" 
+                  style={{ width: `${progress}%` }}
+                ></div>
+              </div>
+            </div>
+
+            <div className="bg-[#0a0a0a] border border-white/5 rounded-2xl p-5 text-left font-mono luxury-shadow max-w-xs mx-auto">
+              <div className="flex gap-1.5 mb-2.5">
+                <div className="w-1.5 h-1.5 rounded-full bg-red-500/30"></div>
+                <div className="w-1.5 h-1.5 rounded-full bg-yellow-500/30"></div>
+                <div className="w-1.5 h-1.5 rounded-full bg-green-500/30"></div>
+              </div>
+              <div className="space-y-1">
+                {currentLogs.map((log, idx) => (
+                  <div key={idx} className={`text-[9px] ${idx === 0 ? 'text-yellow-500' : 'text-slate-600'}`}>
+                    <span className="opacity-30 mr-2">NHẬT KÝ:</span> {log}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Thanh bên (Desktop) */}
+      <aside className={`hidden lg:flex w-72 border-r flex-col p-8 space-y-10 z-50 glass-luxury`}>
+        <div className="flex items-center gap-4">
+          <LuxuryLogoIcon />
+          <div className="pr-4">
+            <h1 className="text-base font-black tracking-tight uppercase leading-tight bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent">{APP_NAME}</h1>
+            <p className="text-[9px] text-yellow-600 font-black uppercase tracking-widest mt-0.5">Phiên bản {VERSION}</p>
           </div>
         </div>
 
-        <nav className="flex-1 space-y-2">
-          <button onClick={() => setActiveTab('home')} className={`w-full flex items-center gap-4 px-5 py-4 rounded-2xl text-xs font-black transition-all ${activeTab === 'home' ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:bg-white/5'}`}>TRANG CHỦ</button>
-          <button onClick={() => setActiveTab('history')} className={`w-full flex items-center gap-4 px-5 py-4 rounded-2xl text-xs font-black transition-all ${activeTab === 'history' ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:bg-white/5'}`}>LỊCH SỬ</button>
-          <div className="pt-6 border-t border-current opacity-5"></div>
-          <button onClick={() => setTheme(isDark ? 'light' : 'dark')} className="w-full flex items-center justify-between px-5 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest text-slate-500 hover:bg-white/5">
-            <span>{isDark ? 'CHẾ ĐỘ SÁNG' : 'CHẾ ĐỘ TỐI'}</span>
-            <div className={`w-8 h-4 rounded-full relative ${isDark ? 'bg-slate-700' : 'bg-slate-200'}`}>
-              <div className={`absolute top-0.5 w-3 h-3 rounded-full bg-white transition-all ${isDark ? 'left-0.5' : 'left-4.5'}`}></div>
+        <nav className="flex-1 space-y-3">
+          <button onClick={() => setActiveTab('home')} className={`w-full flex items-center gap-4 px-6 py-4 rounded-2xl text-[10px] font-black tracking-widest transition-all ${activeTab === 'home' ? 'metallic-gold-btn text-black' : 'text-slate-500 hover:text-white'}`}>TRANG CHỦ</button>
+          <button onClick={() => setActiveTab('history')} className={`w-full flex items-center gap-4 px-6 py-4 rounded-2xl text-[10px] font-black tracking-widest transition-all ${activeTab === 'history' ? 'metallic-gold-btn text-black' : 'text-slate-500 hover:text-white'}`}>LỊCH SỬ</button>
+          <div className="pt-6 border-t border-white/5"></div>
+          <button onClick={() => setTheme(isDark ? 'light' : 'dark')} className="w-full flex items-center justify-between px-6 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest text-slate-500">
+            <span>{isDark ? 'PHONG CÁCH SÁNG' : 'PHONG CÁCH TỐI'}</span>
+            <div className={`w-8 h-4 rounded-full relative ${isDark ? 'bg-yellow-900/40' : 'bg-slate-200'}`}>
+              <div className={`absolute top-0.5 w-3 h-3 rounded-full bg-yellow-500 transition-all ${isDark ? 'left-4.5' : 'left-0.5'}`}></div>
             </div>
           </button>
         </nav>
       </aside>
 
-      <main className="flex-1 overflow-y-auto relative pb-28 lg:pb-10 custom-scrollbar">
-        {/* Banner */}
-        <div className="relative w-full cursor-pointer group overflow-hidden transition-all duration-500 shadow-2xl" style={{ height: `${bannerHeight}px` }}>
-          <img src={bannerImage} className="w-full h-full object-cover brightness-[0.3] transition-transform duration-[2s] group-hover:scale-110" alt="Banner" style={{ imageRendering: 'auto' }} />
-          <div className={`absolute inset-0 bg-gradient-to-t ${isDark ? 'from-[#050505]' : 'from-slate-50'} to-transparent opacity-80`}></div>
-          <div className="absolute bottom-6 left-6 md:left-12 text-shadow-lg">
-            <h2 className="text-3xl md:text-6xl font-black tracking-tighter text-white">{APP_NAME}</h2>
-            <p className="text-indigo-400 font-black text-[9px] md:text-[11px] uppercase tracking-[0.4em] mt-2">{APP_SLOGAN}</p>
+      <main className="flex-1 overflow-y-auto relative pb-28 lg:pb-10 z-10 custom-scrollbar">
+        {/* Banner với slogan tia sáng */}
+        <div className="relative w-full overflow-hidden luxury-shadow border-b border-white/5" style={{ height: `${bannerHeight}px` }}>
+          <img src={bannerImage} className="w-full h-full object-cover brightness-[0.25]" alt="Banner" />
+          <div className={`absolute inset-0 bg-gradient-to-t ${isDark ? 'from-[#050505]' : 'from-slate-50'} via-transparent to-transparent`}></div>
+          <div className="absolute bottom-10 left-8 md:left-16 pr-4">
+            <h2 className="text-4xl md:text-7xl font-black tracking-tight text-white italic">
+              <span className="bg-gradient-to-b from-white via-white to-slate-500 bg-clip-text text-transparent pr-2">{APP_NAME}</span>
+            </h2>
+            <p className="slogan-glow uppercase mt-3">
+              {APP_SLOGAN}
+            </p>
           </div>
-          <button onClick={() => bannerInputRef.current?.click()} className="absolute top-4 right-4 p-2 bg-white/10 backdrop-blur-xl rounded-full border border-white/20 text-white hover:bg-white/20">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+          <button onClick={() => bannerInputRef.current?.click()} className="absolute top-6 right-6 p-3 bg-black/50 backdrop-blur-xl rounded-full border border-white/10 text-yellow-500 hover:scale-110 transition-all">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812-1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
           </button>
         </div>
 
-        <div className="px-4 md:px-10 py-6 grid grid-cols-1 xl:grid-cols-12 gap-6 lg:gap-10">
-          <div className="xl:col-span-5 space-y-6">
-            {/* Thương hiệu Card */}
-            <div className={`p-6 rounded-[2rem] shadow-xl ${isDark ? 'glass' : 'bg-white border border-slate-100'}`}>
-              <h3 className="text-xs font-black mb-6 uppercase tracking-widest flex items-center gap-2">
-                <span className="w-1 h-4 bg-indigo-500 rounded-full"></span> THƯƠNG HIỆU
+        <div className="px-6 md:px-12 py-10 grid grid-cols-1 xl:grid-cols-12 gap-10">
+          <div className="xl:col-span-5 space-y-8">
+            {/* Thẻ nhập liệu */}
+            <div className="glass-luxury p-8 rounded-[2.5rem] space-y-6">
+              <h3 className="text-[10px] font-black uppercase tracking-[0.4em] flex items-center gap-3">
+                <span className="w-1.5 h-6 bg-yellow-500 rounded-full"></span> THÔNG TIN CỬA HÀNG
               </h3>
               <div className="space-y-4">
                 {[
-                  { label: "Tên Shop / Công ty", key: "name", placeholder: "Tên hiển thị..." },
-                  { label: "Hotline Chốt Đơn", key: "hotline", placeholder: "088..." },
-                  { label: "Địa Chỉ", key: "address", placeholder: "Khu vực..." }
+                  { label: "TÊN THƯƠNG HIỆU", key: "name" },
+                  { label: "SỐ ĐIỆN THOẠI (HOTLINE)", key: "hotline" },
+                  { label: "ĐỊA CHỈ TRỤ SỞ", key: "address" }
                 ].map(field => (
                   <div key={field.key}>
-                    <label className="block text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1.5 ml-1">{field.label}</label>
+                    <label className="text-[9px] font-black text-slate-500 mb-1.5 block ml-1">{field.label}</label>
                     <input
                       type="text"
                       value={(companyInfo as any)[field.key]}
                       onChange={(e) => setCompanyInfo(p => ({...p, [field.key]: e.target.value}))}
-                      className={`w-full px-5 py-3 border rounded-xl outline-none transition-all text-sm font-bold ${isDark ? 'bg-white/5 border-white/10 text-white focus:border-indigo-500' : 'bg-slate-50 border-slate-200 focus:bg-white focus:border-indigo-500'}`}
+                      className={`w-full px-5 py-4 rounded-2xl outline-none transition-all text-sm font-bold border ${isDark ? 'bg-white/5 border-white/5 text-white focus:border-yellow-500/50' : 'bg-slate-50 border-slate-200 focus:bg-white focus:border-yellow-500/50'}`}
                     />
                   </div>
                 ))}
               </div>
-              <div className="mt-8 pt-6 border-t border-white/5 space-y-6">
-                <div>
-                  <div className="flex justify-between text-[9px] font-black text-slate-500 mb-2 uppercase tracking-widest">
-                    <span>Chiều cao Banner</span>
-                    <span className="text-indigo-500">{bannerHeight}px</span>
-                  </div>
-                  <input type="range" min="150" max="500" value={bannerHeight} onChange={e => setBannerHeight(parseInt(e.target.value))} className="w-full h-1 bg-indigo-200 rounded-lg appearance-none cursor-pointer accent-indigo-600" />
-                </div>
-                <div className="flex items-center gap-6">
-                  <div onClick={() => logoInputRef.current?.click()} className={`w-16 h-16 rounded-full border-2 border-dashed flex items-center justify-center cursor-pointer overflow-hidden shadow-lg ${isDark ? 'bg-white/5 border-white/10 hover:border-indigo-500' : 'bg-slate-50 border-slate-200 hover:border-indigo-500'}`}>
-                    {logoImage ? <img src={logoImage} className="w-full h-full object-cover" style={{ imageRendering: 'auto' }} /> : <span className="text-xl">+</span>}
-                  </div>
-                  <div className="flex-1">
-                    <div className="flex justify-between text-[9px] font-black text-slate-500 mb-2 uppercase tracking-widest">
-                      <span>Độ mờ Logo</span>
-                      <span className="text-indigo-500">{Math.round(logoOpacity * 100)}%</span>
-                    </div>
-                    <input type="range" min="0" max="1" step="0.01" value={logoOpacity} onChange={e => setLogoOpacity(parseFloat(e.target.value))} className="w-full h-1 bg-indigo-200 rounded-lg appearance-none cursor-pointer accent-indigo-600" />
-                  </div>
-                </div>
-              </div>
             </div>
 
-            {/* Prompt Card */}
-            <div className={`p-6 rounded-[2rem] shadow-xl ${isDark ? 'glass' : 'bg-white border border-slate-100'}`}>
-              <h3 className="text-xs font-black mb-6 uppercase tracking-widest text-emerald-500 flex items-center gap-2">
-                <span className="w-1 h-4 bg-emerald-500 rounded-full"></span> LỜI NHẮC MẶN MÒI
+            <div className="glass-luxury p-8 rounded-[2.5rem] space-y-6">
+              <h3 className="text-[10px] font-black uppercase tracking-[0.4em] text-yellow-500 flex items-center gap-3">
+                <span className="w-1.5 h-6 bg-yellow-500 rounded-full"></span> Ý TƯỞNG QUẢNG CÁO
               </h3>
               <textarea 
                 value={userPrompt}
                 onChange={(e) => setUserPrompt(e.target.value)}
-                placeholder="Ví dụ: Sim Tam Hoa 888 giá cực hời, bao sang tên, người chơi hệ phong thủy..."
-                className={`w-full h-32 px-5 py-4 border rounded-2xl outline-none transition-all text-sm font-bold resize-none ${isDark ? 'bg-white/5 border-white/10 text-white focus:border-indigo-500' : 'bg-slate-50 border-slate-200 focus:bg-white focus:border-indigo-500'}`}
+                placeholder="Mô tả sản phẩm của bác tại đây (Ví dụ: Giày da nam cao cấp, sale 30%)..."
+                className={`w-full h-32 px-5 py-4 rounded-2xl outline-none transition-all text-sm font-bold resize-none border ${isDark ? 'bg-white/5 border-white/5 text-white focus:border-yellow-500/50' : 'bg-slate-50 border-slate-200 focus:bg-white focus:border-yellow-500/50'}`}
               />
-            </div>
-
-            {/* Phong Cách Card */}
-            <div className={`p-6 rounded-[2rem] shadow-xl ${isDark ? 'glass' : 'bg-white border border-slate-100'}`}>
-              <h3 className="text-xs font-black mb-6 uppercase tracking-widest text-purple-500 flex items-center gap-2">
-                <span className="w-1 h-4 bg-purple-500 rounded-full"></span> PHONG CÁCH VIẾT
-              </h3>
-              <div className="grid grid-cols-1 gap-2">
+              <div className="space-y-2">
+                <label className="text-[9px] font-black text-slate-500 mb-1.5 block ml-1 uppercase">CHỌN PHONG CÁCH VIẾT</label>
                 {WRITING_STYLES.map((style) => (
-                  <button key={style.id} onClick={() => setSelectedStyle(style.name)} className={`text-left px-5 py-3 rounded-xl border transition-all ${selectedStyle === style.name ? 'bg-indigo-600 border-indigo-500 text-white shadow-lg' : isDark ? 'bg-white/5 border-white/10 text-slate-500' : 'bg-slate-50 border-slate-200 text-slate-400'}`}>
+                  <button key={style.id} onClick={() => setSelectedStyle(style.name)} className={`w-full text-left px-5 py-3 rounded-2xl border transition-all ${selectedStyle === style.name ? 'border-yellow-500 bg-yellow-500/10' : 'border-white/5 text-slate-500'}`}>
                     <div className="text-[11px] font-black uppercase tracking-tight">{style.name}</div>
-                    <div className={`text-[9px] ${selectedStyle === style.name ? 'text-indigo-100' : 'text-slate-500'}`}>{style.description}</div>
+                    <div className="text-[9px] opacity-60">{style.description}</div>
                   </button>
                 ))}
               </div>
             </div>
 
-            {/* Ảnh Sản Phẩm Card */}
-            <div className={`p-6 rounded-[2rem] shadow-xl ${isDark ? 'glass' : 'bg-white border border-slate-100'}`}>
-              <h3 className="text-xs font-black mb-6 uppercase tracking-widest flex items-center gap-2">
-                <span className="w-1 h-4 bg-indigo-500 rounded-full"></span> ẢNH QUẢNG CÁO
+            <div className="glass-luxury p-8 rounded-[2.5rem] space-y-6">
+               <h3 className="text-[10px] font-black uppercase tracking-[0.4em] flex items-center gap-3">
+                <span className="w-1.5 h-6 bg-yellow-500 rounded-full"></span> HÌNH ẢNH SẢN PHẨM
               </h3>
-              <div onClick={() => fileInputRef.current?.click()} className={`relative aspect-video rounded-2xl border-2 border-dashed flex flex-col items-center justify-center cursor-pointer overflow-hidden transition-all ${isDark ? 'bg-white/5 border-white/10 hover:border-indigo-500' : 'bg-slate-50 border-slate-200 hover:border-indigo-500'}`}>
-                {productImage ? <img src={productImage} className="w-full h-full object-cover" style={{ imageRendering: 'auto' }} /> : (
-                  <div className="text-center opacity-20">
-                    <svg className="w-10 h-10 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4"/></svg>
-                    <p className="text-[10px] font-black uppercase tracking-widest">Tải Ảnh Sản Phẩm</p>
+              <div onClick={() => fileInputRef.current?.click()} className={`relative aspect-video rounded-3xl border-2 border-dashed flex flex-col items-center justify-center cursor-pointer transition-all ${isDark ? 'border-white/10 bg-white/5 hover:border-yellow-500' : 'border-slate-200 bg-slate-50 hover:border-yellow-500'}`}>
+                {productImage ? <img src={productImage} className="w-full h-full object-cover rounded-3xl" /> : (
+                  <div className="text-center opacity-30">
+                    <svg className="w-10 h-10 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M12 4v16m8-8H4"/></svg>
+                    <p className="text-[10px] font-black uppercase tracking-widest">Bấm để tải ảnh lên</p>
                   </div>
                 )}
               </div>
             </div>
 
-            <button onClick={handleGenerate} disabled={isGenerating} className={`w-full py-5 rounded-2xl font-black text-white tracking-[0.2em] text-sm shadow-2xl active:scale-95 transition-all ${isGenerating ? 'bg-slate-800' : 'bg-indigo-600 hover:bg-indigo-500 hover:neon-glow'}`}>
-              {isGenerating ? "AI ĐANG VẮT MUỐI..." : "BẮT ĐẦU SÁNG TẠO TRIỆU VIEW"}
+            <button onClick={handleGenerate} disabled={isGenerating} className="w-full py-6 rounded-[2rem] metallic-gold-btn text-black font-black text-xs tracking-[0.5em] shadow-2xl uppercase">
+              {isGenerating ? "ĐANG CHẾ TÁC..." : "BẮT ĐẦU SÁNG TẠO TRIỆU VIEW"}
             </button>
           </div>
 
-          <div id="results-section" className="xl:col-span-7 space-y-8">
-             {/* Preview Card */}
-             <div className={`p-3 md:p-4 rounded-[2.5rem] shadow-2xl relative ${isDark ? 'glass' : 'bg-white border border-slate-100'}`}>
-              <div className="absolute top-8 left-8 z-20 bg-black/60 backdrop-blur-xl px-4 py-2 rounded-xl border border-white/10 text-[10px] font-black text-white uppercase tracking-widest flex items-center gap-2 shadow-lg">
-                <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span> BẢN NHÁY QUẢNG CÁO
+          <div id="results-section" className="xl:col-span-7 space-y-10">
+             {/* Xem trước hình ảnh */}
+             <div className="glass-luxury p-5 md:p-8 rounded-[3rem] relative">
+              <div className="absolute top-10 left-10 z-20 bg-black/80 backdrop-blur-xl px-4 py-2 rounded-xl border border-yellow-500/30 text-[9px] font-black text-yellow-500 uppercase tracking-widest flex items-center gap-2">
+                <span className="w-1.5 h-1.5 bg-yellow-500 rounded-full animate-pulse"></span> BẢN XEM TRƯỚC
               </div>
               
-              <div className="relative aspect-square rounded-[2rem] overflow-hidden bg-[#0a0a0a] shadow-inner ring-1 ring-white/5">
+              <div className="relative aspect-square rounded-[2rem] overflow-hidden bg-black ring-1 ring-white/10">
                 {productImage ? (
                   <>
-                    <img 
-                      src={productImage} 
-                      className="w-full h-full object-cover select-none" 
-                      style={{ 
-                        imageRendering: 'auto',
-                        WebkitBackfaceVisibility: 'hidden',
-                        backfaceVisibility: 'hidden'
-                      }} 
-                      alt="Ad Preview" 
-                    />
-                    
+                    <img src={productImage} className="w-full h-full object-cover" alt="Preview" />
                     {logoImage && (
-                      <div 
-                        className="absolute top-6 right-6 w-24 h-24 md:w-32 md:h-32 rounded-full overflow-hidden border-[6px] border-white/10 backdrop-blur-sm shadow-[0_20px_50px_rgba(0,0,0,0.5)] transition-all transform hover:scale-105" 
-                        style={{ 
-                          opacity: logoOpacity,
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center'
-                        }}
-                      >
-                        <img 
-                          src={logoImage} 
-                          className="w-full h-full object-cover" 
-                          style={{ imageRendering: 'auto' }}
-                          alt="Logo"
-                        />
+                      <div className="absolute top-6 right-6 w-32 h-32 md:w-44 md:h-44 rounded-full overflow-hidden border-4 border-white/10 shadow-2xl" 
+                        style={{ opacity: logoOpacity, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <img src={logoImage} className="w-full h-full object-cover" />
                       </div>
                     )}
-                    
-                    <div className="absolute bottom-6 left-6 right-6 p-6 rounded-3xl border border-white/10 shadow-2xl overflow-hidden">
-                      <div className="absolute inset-0 bg-black/40 backdrop-blur-md -z-10"></div>
-                      <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/10 to-transparent -z-10"></div>
-                      
-                      <div className="relative flex flex-col items-start gap-1">
-                        <span className="text-[10px] text-indigo-400 font-black uppercase tracking-[0.2em] opacity-90">{companyInfo.name}</span>
-                        <h4 className="text-white text-3xl md:text-4xl font-black tracking-tighter leading-none">{companyInfo.hotline}</h4>
-                        <div className="flex items-center gap-2 mt-2 opacity-50">
-                          <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
-                          <p className="text-white text-[9px] md:text-[10px] uppercase font-black tracking-widest line-clamp-1">{companyInfo.address}</p>
-                        </div>
+                    <div className="absolute bottom-6 left-6 right-6 p-6 rounded-[2rem] glass-luxury border border-yellow-500/20">
+                      <div className="flex flex-col items-start pr-2">
+                        <span className="text-[10px] text-yellow-500 font-black uppercase tracking-widest mb-1">{companyInfo.name}</span>
+                        <h4 className="text-white text-3xl md:text-5xl font-black tracking-tight italic leading-none">{companyInfo.hotline}</h4>
+                        <p className="text-white/50 text-[9px] uppercase font-bold tracking-widest mt-2 line-clamp-1">{companyInfo.address}</p>
                       </div>
                     </div>
                   </>
                 ) : (
-                  <div className="h-full flex flex-col items-center justify-center opacity-10 p-10 text-center animate-pulse">
-                     <svg className="w-24 h-24 mb-6" fill="currentColor" viewBox="0 0 24 24"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg>
-                     <p className="font-black text-sm uppercase tracking-[0.4em]">Đang đợi bác lên ý tưởng...</p>
+                  <div className="h-full flex flex-col items-center justify-center opacity-10">
+                     <LuxuryLogoIcon />
+                     <p className="font-black text-[10px] uppercase tracking-[0.5em] mt-6">Đang đợi kiệt tác của bác...</p>
                   </div>
                 )}
               </div>
             </div>
 
-            {/* Content Output Card */}
-            <div className={`p-8 rounded-[2.5rem] shadow-2xl min-h-[500px] ${isDark ? 'glass' : 'bg-white border border-slate-100'}`}>
-              <h3 className="text-xs font-black mb-8 uppercase tracking-widest flex items-center gap-3">
-                <span className="w-1.5 h-6 bg-emerald-500 rounded-full"></span> CONTENT AI "VẮT MUỐI"
-              </h3>
-              {generatedContent ? (
-                <div className="space-y-8 animate-fadeIn">
-                  <div className="p-6 rounded-3xl border-2 border-dashed border-indigo-500/30 bg-indigo-500/5">
-                    <p className={`font-black text-2xl md:text-3xl leading-tight ${isDark ? 'text-white' : 'text-slate-900'}`}>{generatedContent.headline}</p>
+            {/* Kết quả nội dung */}
+            <div className="relative p-[1px] rounded-[3rem] overflow-hidden group">
+              <div className="absolute inset-0 gold-shimmer-border opacity-50 group-hover:opacity-100 transition-opacity"></div>
+              <div className="relative glass-luxury p-10 rounded-[3rem] min-h-[400px]">
+                <h3 className="text-[10px] font-black mb-8 uppercase tracking-[0.4em] flex items-center gap-3">
+                  <span className="w-1.5 h-6 bg-yellow-500 rounded-full"></span> NỘI DUNG QUẢNG CÁO AI
+                </h3>
+                {generatedContent ? (
+                  <div className="space-y-8 animate-fadeIn">
+                    <div className="p-6 rounded-2xl bg-yellow-500/5 border border-yellow-500/20">
+                      <p className="font-black text-2xl md:text-4xl italic tracking-tight leading-tight bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent pr-2">{generatedContent.headline}</p>
+                    </div>
+                    <p className="leading-relaxed font-medium text-lg whitespace-pre-line text-slate-300">{generatedContent.body}</p>
+                    <div className="flex flex-wrap gap-2">
+                      {generatedContent.hashtags.map(tag => (
+                        <span key={tag} className="text-[10px] font-black px-4 py-2 rounded-lg bg-white/5 border border-white/5 text-yellow-500">#{tag}</span>
+                      ))}
+                    </div>
+                    <button onClick={() => {
+                        const text = `${generatedContent.headline}\n\n${generatedContent.body}\n\n${generatedContent.hashtags.map(t => `#${t}`).join(' ')}`;
+                        navigator.clipboard.writeText(text);
+                        alert("Đã sao chép Content!");
+                      }} className="w-full py-5 metallic-gold-btn text-black rounded-[2rem] text-[10px] font-black tracking-widest uppercase">
+                      SAO CHÉP TOÀN BỘ NỘI DUNG
+                    </button>
                   </div>
-                  <p className={`leading-relaxed font-bold text-base md:text-lg whitespace-pre-line ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>{generatedContent.body}</p>
-                  <div className="flex flex-wrap gap-2">
-                    {generatedContent.hashtags.map(tag => (
-                      <span key={tag} className="text-[10px] font-black px-4 py-2 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400">
-                        #{tag.replace(/^#+/, '')}
-                      </span>
-                    ))}
-                  </div>
-                  <button onClick={() => {
-                      const text = `${generatedContent.headline}\n\n${generatedContent.body}\n\n${generatedContent.hashtags.map(t => `#${t.replace(/^#+/, '')}`).join(' ')}`;
-                      navigator.clipboard.writeText(text);
-                      alert("Đã sao chép Content 'mặn mòi' thành công!");
-                    }} className="w-full py-5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-2xl text-sm font-black tracking-widest shadow-xl transition-all active:scale-95">
-                    SAO CHÉP TOÀN BỘ BÀI VIẾT
-                  </button>
-                </div>
-              ) : (
-                 <div className="h-48 flex flex-col items-center justify-center opacity-10 text-center">
-                   <p className="text-[10px] font-black uppercase tracking-[0.6em]">Chưa có bài viết mới</p>
-                 </div>
-              )}
+                ) : (
+                   <div className="h-64 flex items-center justify-center opacity-10 uppercase text-[10px] font-black tracking-[0.5em]">Chưa có dữ liệu</div>
+                )}
+              </div>
             </div>
           </div>
         </div>
       </main>
 
-      {/* Mobile Nav */}
-      <nav className={`fixed bottom-0 w-full h-20 backdrop-blur-3xl border-t flex lg:hidden justify-around items-center safe-bottom z-50 transition-all ${isDark ? 'bg-[#0a0a0a]/90 border-white/5' : 'bg-white/95 border-slate-200'}`}>
-        <button onClick={() => setActiveTab('home')} className={`p-4 text-[10px] font-black uppercase tracking-[0.2em] ${activeTab === 'home' ? 'text-indigo-500' : 'text-slate-400'}`}>HOME</button>
-        <button onClick={handleGenerate} className="w-16 h-16 bg-indigo-600 rounded-[2rem] flex items-center justify-center text-white -translate-y-8 shadow-2xl border-4 border-[#050505] active:scale-90 transition-transform">
+      {/* Điều hướng Mobile */}
+      <nav className={`fixed bottom-0 w-full h-20 glass-luxury border-t flex lg:hidden justify-around items-center z-50`}>
+        <button onClick={() => setActiveTab('home')} className={`text-[10px] font-black tracking-widest transition-colors ${activeTab === 'home' ? 'text-yellow-500' : 'text-slate-500'}`}>TRANG CHỦ</button>
+        <button onClick={handleGenerate} className="w-16 h-16 metallic-gold-btn rounded-2xl flex items-center justify-center text-black -translate-y-8 shadow-2xl border-4 border-[#050505]">
           <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 4v16m8-8H4"/></svg>
         </button>
-        <button onClick={() => setActiveTab('history')} className={`p-4 text-[10px] font-black uppercase tracking-[0.2em] ${activeTab === 'history' ? 'text-indigo-500' : 'text-slate-400'}`}>LỊCH SỬ</button>
+        <button onClick={() => setActiveTab('history')} className={`text-[10px] font-black tracking-widest transition-colors ${activeTab === 'history' ? 'text-yellow-500' : 'text-slate-500'}`}>LỊCH SỬ</button>
       </nav>
 
       <input type="file" hidden ref={logoInputRef} onChange={e => handleFileChange(e, setLogoImage)} />
