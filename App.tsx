@@ -1,45 +1,73 @@
 
-import React, { useState, useRef } from 'react';
-import { CompanyInfo, AdContent } from './types';
-import { generateAdContent } from './services/geminiService';
+import React, { useState, useRef, useEffect } from 'react';
+import { CompanyInfo, AdContent, HistoryItem } from './types';
+import { generateAdContent, generateAIImage } from './services/geminiService';
 
-// InputGroup Component được định nghĩa trực tiếp tại đây để đảm bảo build không lỗi đường dẫn
-interface InputGroupProps {
-  label: string;
-  value: string;
-  onChange: (v: string) => void;
-  placeholder?: string;
-}
+const APP_NAME = "Long Thanh Đào Luxury";
+const APP_SLOGAN = "Chuyên Gia Content AI Triệu View";
+const VERSION = "2.0.2"; 
 
-const InputGroup: React.FC<InputGroupProps> = ({ label, value, onChange, placeholder }) => (
-  <div className="mb-4">
-    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5 ml-1">{label}</label>
-    <input
-      type="text"
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      placeholder={placeholder}
-      className="w-full px-5 py-3 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-2 focus:ring-indigo-500 focus:bg-white outline-none transition-all text-sm font-medium text-slate-800"
-    />
-  </div>
-);
+const WRITING_STYLES = [
+  { id: 'pro', name: 'Sang trọng & Chuyên nghiệp', description: 'Ngôn từ đẳng cấp, lịch sự' },
+  { id: 'funny', name: 'Mặn mòi & Lầy lội (Viral)', description: 'Gen Z slang, bao muối, cực dính' },
+  { id: 'short', name: 'Ngắn gọn & Chốt đơn', description: 'Tập trung vào giá và hành động' },
+  { id: 'story', name: 'Kể chuyện (Storytelling)', description: 'Chạm tới cảm xúc khách hàng' },
+];
+
+const LOADING_STEPS = [
+  "Đang pha muối vào Content...",
+  "AI đang vận công viết lách...",
+  "Đang 'vẩy' thêm icon lầy lội...",
+  "Tối ưu hóa khả năng chốt đơn...",
+  "Xong rồi! Check hàng thôi anh em!"
+];
 
 const App: React.FC = () => {
-  const [bannerImage, setBannerImage] = useState<string | null>("https://images.unsplash.com/photo-1611162617474-5b21e879e113?q=80&w=1000&auto=format&fit=crop");
-  const [productImage, setProductImage] = useState<string | null>(null);
-  const [logoImage, setLogoImage] = useState<string | null>(null);
-  const [logoOpacity, setLogoOpacity] = useState<number>(0.8);
+  const [activeTab, setActiveTab] = useState<'home' | 'history'>('home');
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
-  const [companyInfo, setCompanyInfo] = useState<CompanyInfo>({
-    name: '',
-    hotline: '',
-    address: ''
+  const [progress, setProgress] = useState<number>(0);
+  const [loadingText, setLoadingText] = useState<string>("");
+  const [theme, setTheme] = useState<'dark' | 'light'>(() => (localStorage.getItem('ltd_theme') as 'dark' | 'light') || 'dark');
+  
+  const [userPrompt, setUserPrompt] = useState<string>("");
+  const [selectedStyle, setSelectedStyle] = useState<string>(WRITING_STYLES[1].name); // Mặc định là Mặn mòi
+
+  const [bannerImage, setBannerImage] = useState<string>(() => localStorage.getItem('ltd_banner') || "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=2000&auto=format&fit=crop");
+  const [bannerHeight, setBannerHeight] = useState<number>(() => parseInt(localStorage.getItem('ltd_banner_height') || '256'));
+  const [companyInfo, setCompanyInfo] = useState<CompanyInfo>(() => {
+    const saved = localStorage.getItem('long_thanh_dao_info');
+    return saved ? JSON.parse(saved) : { 
+      name: 'Long Thanh Đào Luxury', 
+      hotline: '088642345', 
+      address: '217 Hoàng Quốc Việt, Lào Cai' 
+    };
   });
+  
+  const [logoImage, setLogoImage] = useState<string | null>(() => localStorage.getItem('ltd_logo'));
+  const [logoOpacity, setLogoOpacity] = useState<number>(() => parseFloat(localStorage.getItem('ltd_logo_opacity') || '0.8'));
+  const [productImage, setProductImage] = useState<string | null>(null);
   const [generatedContent, setGeneratedContent] = useState<AdContent | null>(null);
+  const [history, setHistory] = useState<HistoryItem[]>(() => {
+    const saved = localStorage.getItem('long_thanh_dao_history');
+    return saved ? JSON.parse(saved) : [];
+  });
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const logoInputRef = useRef<HTMLInputElement>(null);
   const bannerInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    localStorage.setItem('long_thanh_dao_info', JSON.stringify(companyInfo));
+    localStorage.setItem('ltd_banner', bannerImage);
+    localStorage.setItem('ltd_banner_height', bannerHeight.toString());
+    localStorage.setItem('ltd_theme', theme);
+    localStorage.setItem('ltd_logo_opacity', logoOpacity.toString());
+    if (logoImage) localStorage.setItem('ltd_logo', logoImage);
+  }, [companyInfo, bannerImage, bannerHeight, logoImage, theme, logoOpacity]);
+
+  useEffect(() => {
+    localStorage.setItem('long_thanh_dao_history', JSON.stringify(history));
+  }, [history]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, setter: (val: string | null) => void) => {
     const file = e.target.files?.[0];
@@ -51,239 +79,299 @@ const App: React.FC = () => {
   };
 
   const handleGenerate = async () => {
-    if (!productImage) {
-      alert("Vui lòng tải ảnh sản phẩm lên!");
-      return;
-    }
-    if (!companyInfo.name || !companyInfo.hotline) {
-      alert("Vui lòng điền thông tin công ty!");
-      return;
-    }
-
+    if (!productImage && !userPrompt) return alert("Bác phải cho AI biết sản phẩm là gì chứ? Tải ảnh hoặc viết mô tả đi ạ!");
+    
     setIsGenerating(true);
+    setProgress(0);
+    
+    const progressInterval = setInterval(() => {
+      setProgress(prev => {
+        const step = Math.floor(prev / 20);
+        setLoadingText(LOADING_STEPS[Math.min(step, LOADING_STEPS.length - 1)]);
+        if (prev >= 96) return prev;
+        return prev + Math.random() * 8;
+      });
+    }, 300);
+
     try {
-      const content = await generateAdContent(productImage, companyInfo);
+      let finalImage = productImage;
+      if (!productImage && userPrompt) {
+        finalImage = await generateAIImage(userPrompt);
+        setProductImage(finalImage);
+      }
+
+      const content = await generateAdContent(finalImage!, companyInfo, selectedStyle, userPrompt);
       setGeneratedContent(content);
-      window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
-    } catch (err) {
+      
+      const newItem: HistoryItem = {
+        id: Date.now().toString(),
+        timestamp: Date.now(),
+        productImage: finalImage!,
+        companyName: companyInfo.name,
+        content: content
+      };
+      setHistory(prev => [newItem, ...prev]);
+      setProgress(100);
+      setTimeout(() => {
+        document.getElementById('results-section')?.scrollIntoView({ behavior: 'smooth' });
+      }, 500);
+    } catch (err: any) {
       console.error(err);
-      alert("Có lỗi xảy ra khi tạo nội dung. Vui lòng kiểm tra lại API_KEY!");
+      if (err.message === "MISSING_API_KEY") {
+        alert("LỖI: Chưa cấu hình API_KEY! Bác hãy vào Vercel Settings -> Environment Variables, thêm biến API_KEY nhé.");
+      } else {
+        alert("AI đang bị 'say lúa' hoặc nghẽn mạng. Bác thử lại lần nữa nhé!");
+      }
     } finally {
-      setIsGenerating(false);
+      clearInterval(progressInterval);
+      setTimeout(() => setIsGenerating(false), 800);
     }
   };
 
-  return (
-    <div className="min-h-screen bg-slate-50 flex flex-col items-center pb-24">
-      <div 
-        className="relative w-full max-w-4xl h-56 sm:h-72 overflow-hidden rounded-b-[2.5rem] shadow-xl cursor-pointer group"
-        onClick={() => bannerInputRef.current?.click()}
-      >
-        <img 
-          src={bannerImage || ""} 
-          alt="App Banner" 
-          className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
-        />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent flex items-end p-8">
-          <div className="safe-top">
-            <h1 className="text-4xl font-black text-white tracking-tight drop-shadow-lg">AdGenius Pro</h1>
-            <p className="text-indigo-200 font-medium opacity-90">AI Content Marketing Assistant</p>
+  const isDark = theme === 'dark';
+
+  const LoadingOverlay = () => (
+    <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-black/95 backdrop-blur-3xl animate-fadeIn p-8">
+      <div className="w-full max-w-sm text-center space-y-8">
+        <div className="relative w-32 h-32 mx-auto">
+          <svg className="w-full h-full -rotate-90">
+            <circle cx="64" cy="64" r="60" stroke="currentColor" strokeWidth="8" fill="transparent" className="text-white/5" />
+            <circle cx="64" cy="64" r="60" stroke="currentColor" strokeWidth="8" fill="transparent" 
+              className="text-indigo-500 transition-all duration-300 ease-out"
+              strokeDasharray={377}
+              strokeDashoffset={377 - (377 * progress) / 100}
+              strokeLinecap="round"
+            />
+          </svg>
+          <div className="absolute inset-0 flex items-center justify-center">
+            <span className="text-3xl font-black text-white">{Math.round(progress)}%</span>
           </div>
         </div>
-        <input type="file" hidden ref={bannerInputRef} onChange={(e) => handleFileChange(e, setBannerImage)} accept="image/*" />
+        <div className="space-y-2">
+          <h2 className="text-xl font-black text-white uppercase tracking-tight">{loadingText}</h2>
+          <div className="w-full h-1 bg-white/5 rounded-full overflow-hidden">
+            <div className="h-full bg-indigo-600 transition-all duration-300" style={{ width: `${progress}%` }}></div>
+          </div>
+        </div>
       </div>
+    </div>
+  );
 
-      <main className="w-full max-w-4xl px-4 py-6 grid grid-cols-1 md:grid-cols-2 gap-6">
-        <section className="space-y-6">
-          <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100">
-            <h2 className="text-lg font-bold text-slate-800 mb-5 flex items-center gap-2">
-              <span className="w-2 h-6 bg-indigo-600 rounded-full"></span>
-              Thông tin thương hiệu
-            </h2>
+  return (
+    <div className={`min-h-screen transition-colors duration-500 flex flex-col lg:flex-row overflow-hidden font-['Plus_Jakarta_Sans'] ${isDark ? 'bg-[#050505] text-slate-200' : 'bg-slate-50 text-slate-900'}`}>
+      
+      {isGenerating && <LoadingOverlay />}
 
-            <div className="space-y-1">
-              <InputGroup 
-                label="Tên Công Ty" 
-                value={companyInfo.name} 
-                onChange={(v) => setCompanyInfo(prev => ({...prev, name: v}))} 
-                placeholder="VD: Shop Thời Trang Luxury"
-              />
-              <InputGroup 
-                label="Hotline" 
-                value={companyInfo.hotline} 
-                onChange={(v) => setCompanyInfo(prev => ({...prev, hotline: v}))} 
-                placeholder="VD: 0900.xxx.xxx"
-              />
-              <InputGroup 
-                label="Địa chỉ" 
-                value={companyInfo.address} 
-                onChange={(v) => setCompanyInfo(prev => ({...prev, address: v}))} 
-                placeholder="VD: Quận 1, TP. Hồ Chí Minh"
-              />
-            </div>
-
-            <div className="mt-6 pt-6 border-t border-slate-50">
-              <label className="block text-sm font-semibold text-slate-700 mb-3">Logo thương hiệu</label>
-              <div className="flex items-center gap-5">
-                <button 
-                  onClick={() => logoInputRef.current?.click()}
-                  className="w-20 h-20 rounded-full border-2 border-dashed border-indigo-200 bg-indigo-50/30 flex items-center justify-center overflow-hidden hover:border-indigo-500 transition-all shadow-inner"
-                >
-                  {logoImage ? (
-                    <img src={logoImage} className="w-full h-full object-cover" alt="Logo" />
-                  ) : (
-                    <svg className="w-8 h-8 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4"></path></svg>
-                  )}
-                </button>
-                <div className="flex-1">
-                  <div className="flex justify-between mb-2">
-                    <span className="text-xs font-bold text-slate-500 uppercase">Độ mờ logo</span>
-                    <span className="text-xs font-bold text-indigo-600">{Math.round(logoOpacity * 100)}%</span>
-                  </div>
-                  <input 
-                    type="range" min="0" max="1" step="0.01" 
-                    value={logoOpacity} 
-                    onChange={(e) => setLogoOpacity(parseFloat(e.target.value))}
-                    className="w-full h-1.5 bg-slate-100 rounded-lg appearance-none cursor-pointer accent-indigo-600"
-                  />
-                </div>
-              </div>
-              <input type="file" hidden ref={logoInputRef} onChange={(e) => handleFileChange(e, setLogoImage)} accept="image/*" />
-            </div>
+      {/* Sidebar Desktop */}
+      <aside className={`hidden lg:flex w-72 border-r flex-col p-8 space-y-10 z-50 transition-colors ${isDark ? 'bg-[#0a0a0a] border-white/5' : 'bg-white border-slate-200 shadow-xl'}`}>
+        <div className="flex items-center gap-4 px-2">
+          <div className="w-12 h-12 bg-indigo-600 rounded-2xl flex items-center justify-center font-black text-white text-xl shadow-xl shadow-indigo-500/20">L</div>
+          <div>
+            <h1 className="text-base font-black tracking-tighter uppercase">Long Thanh</h1>
+            <p className="text-[9px] text-slate-500 font-black uppercase tracking-widest">v{VERSION}</p>
           </div>
+        </div>
 
-          <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100">
-            <h2 className="text-lg font-bold text-slate-800 mb-5 flex items-center gap-2">
-              <span className="w-2 h-6 bg-indigo-600 rounded-full"></span>
-              Sản phẩm quảng cáo
-            </h2>
-            <div 
-              onClick={() => fileInputRef.current?.click()}
-              className="relative w-full aspect-video bg-slate-50 border-2 border-dashed border-slate-200 rounded-2xl flex flex-col items-center justify-center cursor-pointer hover:bg-indigo-50/30 hover:border-indigo-300 transition-all overflow-hidden group"
-            >
-              {productImage ? (
-                <img src={productImage} className="w-full h-full object-cover" alt="Product" />
-              ) : (
-                <div className="text-center p-6">
-                  <div className="bg-white shadow-sm w-12 h-12 rounded-xl flex items-center justify-center mx-auto mb-3 text-indigo-600">
-                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
-                  </div>
-                  <p className="text-sm font-bold text-slate-700">Chụp hoặc Tải ảnh</p>
-                  <p className="text-xs text-slate-400 mt-1">AI sẽ tự nhận diện sản phẩm</p>
-                </div>
-              )}
+        <nav className="flex-1 space-y-2">
+          <button onClick={() => setActiveTab('home')} className={`w-full flex items-center gap-4 px-5 py-4 rounded-2xl text-xs font-black transition-all ${activeTab === 'home' ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:bg-white/5'}`}>TRANG CHỦ</button>
+          <button onClick={() => setActiveTab('history')} className={`w-full flex items-center gap-4 px-5 py-4 rounded-2xl text-xs font-black transition-all ${activeTab === 'history' ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:bg-white/5'}`}>LỊCH SỬ</button>
+          <div className="pt-6 border-t border-current opacity-5"></div>
+          <button onClick={() => setTheme(isDark ? 'light' : 'dark')} className="w-full flex items-center justify-between px-5 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest text-slate-500 hover:bg-white/5">
+            <span>{isDark ? 'CHẾ ĐỘ SÁNG' : 'CHẾ ĐỘ TỐI'}</span>
+            <div className={`w-8 h-4 rounded-full relative ${isDark ? 'bg-slate-700' : 'bg-slate-200'}`}>
+              <div className={`absolute top-0.5 w-3 h-3 rounded-full bg-white transition-all ${isDark ? 'left-0.5' : 'left-4.5'}`}></div>
             </div>
-            <input type="file" hidden ref={fileInputRef} onChange={(e) => handleFileChange(e, setProductImage)} accept="image/*" />
-          </div>
-
-          <button 
-            onClick={handleGenerate}
-            disabled={isGenerating}
-            className={`w-full py-4 rounded-2xl font-black text-white shadow-xl shadow-indigo-200 transition-all flex items-center justify-center gap-3 ${
-              isGenerating ? 'bg-slate-400 scale-95' : 'bg-indigo-600 active:scale-95'
-            }`}
-          >
-            {isGenerating ? (
-              <svg className="animate-spin h-6 w-6 text-white" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-              </svg>
-            ) : (
-              <>
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
-                TẠO BÀI VIẾT NGAY
-              </>
-            )}
           </button>
-        </section>
+        </nav>
+      </aside>
 
-        <section className="space-y-6">
-          <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100">
-            <h2 className="text-lg font-bold text-slate-800 mb-5 flex items-center gap-2">
-              <span className="w-2 h-6 bg-violet-600 rounded-full"></span>
-              Xem trước hình ảnh
-            </h2>
-            <div className="relative w-full aspect-square rounded-2xl overflow-hidden bg-slate-50 border border-slate-100 shadow-inner group">
-              {productImage ? (
-                <>
-                  <img src={productImage} className="w-full h-full object-cover" alt="Preview" />
-                  {logoImage && (
-                    <div 
-                      className="absolute top-4 right-4 w-16 h-16 rounded-full overflow-hidden border-2 border-white/50 shadow-lg pointer-events-none"
-                      style={{ opacity: logoOpacity }}
-                    >
-                      <img src={logoImage} className="w-full h-full object-cover" alt="Overlay" />
-                    </div>
-                  )}
-                  <div className="absolute bottom-4 left-4 right-4 bg-white/10 backdrop-blur-md p-3 rounded-xl border border-white/20">
-                    <p className="text-[10px] text-white/80 font-bold uppercase tracking-widest">{companyInfo.name || "Brand Name"}</p>
-                    <p className="text-white text-xs font-medium">{companyInfo.hotline || "Hotline"}</p>
+      <main className="flex-1 overflow-y-auto relative pb-28 lg:pb-10 custom-scrollbar">
+        {/* Banner */}
+        <div className="relative w-full cursor-pointer group overflow-hidden transition-all duration-500 shadow-2xl" style={{ height: `${bannerHeight}px` }}>
+          <img src={bannerImage} className="w-full h-full object-cover brightness-[0.3] transition-transform duration-[2s] group-hover:scale-110" alt="Banner" />
+          <div className={`absolute inset-0 bg-gradient-to-t ${isDark ? 'from-[#050505]' : 'from-slate-50'} to-transparent opacity-80`}></div>
+          <div className="absolute bottom-6 left-6 md:left-12">
+            <h2 className="text-3xl md:text-6xl font-black tracking-tighter text-white">{APP_NAME}</h2>
+            <p className="text-indigo-400 font-black text-[9px] md:text-[11px] uppercase tracking-[0.4em] mt-2">{APP_SLOGAN}</p>
+          </div>
+          <button onClick={() => bannerInputRef.current?.click()} className="absolute top-4 right-4 p-2 bg-white/10 backdrop-blur-xl rounded-full border border-white/20 text-white hover:bg-white/20">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+          </button>
+        </div>
+
+        <div className="px-4 md:px-10 py-6 grid grid-cols-1 xl:grid-cols-12 gap-6 lg:gap-10">
+          <div className="xl:col-span-5 space-y-6">
+            {/* Thương hiệu Card */}
+            <div className={`p-6 rounded-[2rem] shadow-xl ${isDark ? 'glass' : 'bg-white border border-slate-100'}`}>
+              <h3 className="text-xs font-black mb-6 uppercase tracking-widest flex items-center gap-2">
+                <span className="w-1 h-4 bg-indigo-500 rounded-full"></span> THƯƠNG HIỆU
+              </h3>
+              <div className="space-y-4">
+                {[
+                  { label: "Tên Shop / Công ty", key: "name", placeholder: "Tên hiển thị..." },
+                  { label: "Hotline Chốt Đơn", key: "hotline", placeholder: "088..." },
+                  { label: "Địa Chỉ", key: "address", placeholder: "Khu vực..." }
+                ].map(field => (
+                  <div key={field.key}>
+                    <label className="block text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1.5 ml-1">{field.label}</label>
+                    <input
+                      type="text"
+                      value={(companyInfo as any)[field.key]}
+                      onChange={(e) => setCompanyInfo(p => ({...p, [field.key]: e.target.value}))}
+                      className={`w-full px-5 py-3 border rounded-xl outline-none transition-all text-sm font-bold ${isDark ? 'bg-white/5 border-white/10 text-white focus:border-indigo-500' : 'bg-slate-50 border-slate-200 focus:bg-white focus:border-indigo-500'}`}
+                    />
                   </div>
-                </>
-              ) : (
-                <div className="flex items-center justify-center h-full text-slate-300 text-sm italic">
-                  Chưa có ảnh xem trước
+                ))}
+              </div>
+              <div className="mt-8 pt-6 border-t border-white/5 space-y-6">
+                <div>
+                  <div className="flex justify-between text-[9px] font-black text-slate-500 mb-2 uppercase tracking-widest">
+                    <span>Chiều cao Banner</span>
+                    <span className="text-indigo-500">{bannerHeight}px</span>
+                  </div>
+                  <input type="range" min="150" max="500" value={bannerHeight} onChange={e => setBannerHeight(parseInt(e.target.value))} className="w-full h-1 bg-indigo-200 rounded-lg appearance-none cursor-pointer accent-indigo-600" />
                 </div>
+                <div className="flex items-center gap-6">
+                  <div onClick={() => logoInputRef.current?.click()} className={`w-16 h-16 rounded-full border-2 border-dashed flex items-center justify-center cursor-pointer overflow-hidden shadow-lg ${isDark ? 'bg-white/5 border-white/10 hover:border-indigo-500' : 'bg-slate-50 border-slate-200 hover:border-indigo-500'}`}>
+                    {logoImage ? <img src={logoImage} className="w-full h-full object-cover" /> : <span className="text-xl">+</span>}
+                  </div>
+                  <div className="flex-1">
+                    <div className="flex justify-between text-[9px] font-black text-slate-500 mb-2 uppercase tracking-widest">
+                      <span>Độ mờ Logo</span>
+                      <span className="text-indigo-500">{Math.round(logoOpacity * 100)}%</span>
+                    </div>
+                    <input type="range" min="0" max="1" step="0.01" value={logoOpacity} onChange={e => setLogoOpacity(parseFloat(e.target.value))} className="w-full h-1 bg-indigo-200 rounded-lg appearance-none cursor-pointer accent-indigo-600" />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Prompt Card */}
+            <div className={`p-6 rounded-[2rem] shadow-xl ${isDark ? 'glass' : 'bg-white border border-slate-100'}`}>
+              <h3 className="text-xs font-black mb-6 uppercase tracking-widest text-emerald-500 flex items-center gap-2">
+                <span className="w-1 h-4 bg-emerald-500 rounded-full"></span> LỜI NHẮC MẶN MÒI
+              </h3>
+              <textarea 
+                value={userPrompt}
+                onChange={(e) => setUserPrompt(e.target.value)}
+                placeholder="Ví dụ: Sim Tam Hoa 888 giá cực hời, bao sang tên, người chơi hệ phong thủy..."
+                className={`w-full h-32 px-5 py-4 border rounded-2xl outline-none transition-all text-sm font-bold resize-none ${isDark ? 'bg-white/5 border-white/10 text-white focus:border-indigo-500' : 'bg-slate-50 border-slate-200 focus:bg-white focus:border-indigo-500'}`}
+              />
+            </div>
+
+            {/* Phong Cách Card */}
+            <div className={`p-6 rounded-[2rem] shadow-xl ${isDark ? 'glass' : 'bg-white border border-slate-100'}`}>
+              <h3 className="text-xs font-black mb-6 uppercase tracking-widest text-purple-500 flex items-center gap-2">
+                <span className="w-1 h-4 bg-purple-500 rounded-full"></span> PHONG CÁCH VIẾT
+              </h3>
+              <div className="grid grid-cols-1 gap-2">
+                {WRITING_STYLES.map((style) => (
+                  <button key={style.id} onClick={() => setSelectedStyle(style.name)} className={`text-left px-5 py-3 rounded-xl border transition-all ${selectedStyle === style.name ? 'bg-indigo-600 border-indigo-500 text-white shadow-lg' : isDark ? 'bg-white/5 border-white/10 text-slate-500' : 'bg-slate-50 border-slate-200 text-slate-400'}`}>
+                    <div className="text-[11px] font-black uppercase tracking-tight">{style.name}</div>
+                    <div className={`text-[9px] ${selectedStyle === style.name ? 'text-indigo-100' : 'text-slate-500'}`}>{style.description}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Ảnh Sản Phẩm Card */}
+            <div className={`p-6 rounded-[2rem] shadow-xl ${isDark ? 'glass' : 'bg-white border border-slate-100'}`}>
+              <h3 className="text-xs font-black mb-6 uppercase tracking-widest flex items-center gap-2">
+                <span className="w-1 h-4 bg-indigo-500 rounded-full"></span> ẢNH QUẢNG CÁO
+              </h3>
+              <div onClick={() => fileInputRef.current?.click()} className={`relative aspect-video rounded-2xl border-2 border-dashed flex flex-col items-center justify-center cursor-pointer overflow-hidden transition-all ${isDark ? 'bg-white/5 border-white/10 hover:border-indigo-500' : 'bg-slate-50 border-slate-200 hover:border-indigo-500'}`}>
+                {productImage ? <img src={productImage} className="w-full h-full object-cover" /> : (
+                  <div className="text-center opacity-20">
+                    <svg className="w-10 h-10 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4"/></svg>
+                    <p className="text-[10px] font-black uppercase tracking-widest">Tải Ảnh Sản Phẩm</p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <button onClick={handleGenerate} disabled={isGenerating} className={`w-full py-5 rounded-2xl font-black text-white tracking-[0.2em] text-sm shadow-2xl active:scale-95 transition-all ${isGenerating ? 'bg-slate-800' : 'bg-indigo-600 hover:bg-indigo-500 hover:neon-glow'}`}>
+              {isGenerating ? "AI ĐANG VẮT MUỐI..." : "BẮT ĐẦU SÁNG TẠO TRIỆU VIEW"}
+            </button>
+          </div>
+
+          <div id="results-section" className="xl:col-span-7 space-y-8">
+             {/* Preview Card */}
+             <div className={`p-4 rounded-[2.5rem] shadow-2xl relative ${isDark ? 'glass' : 'bg-white border border-slate-100'}`}>
+              <div className="absolute top-8 left-8 z-10 bg-black/50 backdrop-blur-xl px-4 py-2 rounded-xl border border-white/10 text-[10px] font-black text-white uppercase tracking-widest flex items-center gap-2">
+                <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span> PREVIEW BÀI ĐĂNG
+              </div>
+              <div className="relative aspect-square rounded-[2rem] overflow-hidden bg-black shadow-inner">
+                {productImage ? (
+                  <>
+                    <img src={productImage} className="w-full h-full object-cover" />
+                    {logoImage && (
+                      <div className="absolute top-6 right-6 w-20 h-20 md:w-28 md:h-28 rounded-full overflow-hidden border-4 border-white/20 shadow-2xl" style={{ opacity: logoOpacity }}>
+                        <img src={logoImage} className="w-full h-full object-cover" />
+                      </div>
+                    )}
+                    <div className="absolute bottom-6 left-6 right-6 glass p-6 rounded-3xl border-white/10">
+                      <p className="text-[10px] text-indigo-400 font-black uppercase tracking-widest mb-1">{companyInfo.name}</p>
+                      <p className="text-white text-2xl md:text-3xl font-black tracking-tight">{companyInfo.hotline}</p>
+                      <p className="text-white/40 text-[9px] md:text-[11px] mt-1 uppercase font-bold tracking-wider">{companyInfo.address}</p>
+                    </div>
+                  </>
+                ) : (
+                  <div className="h-full flex flex-col items-center justify-center opacity-10 p-10 text-center">
+                     <svg className="w-24 h-24 mb-6" fill="currentColor" viewBox="0 0 24 24"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg>
+                     <p className="font-black text-sm uppercase tracking-[0.4em]">Đang đợi bác ra lệnh...</p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Content Output Card */}
+            <div className={`p-8 rounded-[2.5rem] shadow-2xl min-h-[500px] ${isDark ? 'glass' : 'bg-white border border-slate-100'}`}>
+              <h3 className="text-xs font-black mb-8 uppercase tracking-widest flex items-center gap-3">
+                <span className="w-1.5 h-6 bg-emerald-500 rounded-full"></span> CONTENT AI "VẮT MUỐI"
+              </h3>
+              {generatedContent ? (
+                <div className="space-y-8 animate-fadeIn">
+                  <div className="p-6 rounded-3xl border-2 border-dashed border-indigo-500/30 bg-indigo-500/5">
+                    <p className={`font-black text-2xl md:text-3xl leading-tight ${isDark ? 'text-white' : 'text-slate-900'}`}>{generatedContent.headline}</p>
+                  </div>
+                  <p className={`leading-relaxed font-bold text-base md:text-lg whitespace-pre-line ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>{generatedContent.body}</p>
+                  <div className="flex flex-wrap gap-2">
+                    {generatedContent.hashtags.map(tag => (
+                      <span key={tag} className="text-[10px] font-black px-4 py-2 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400">
+                        #{tag.replace(/^#+/, '')}
+                      </span>
+                    ))}
+                  </div>
+                  <button onClick={() => {
+                      const text = `${generatedContent.headline}\n\n${generatedContent.body}\n\n${generatedContent.hashtags.map(t => `#${t.replace(/^#+/, '')}`).join(' ')}`;
+                      navigator.clipboard.writeText(text);
+                      alert("Đã sao chép Content 'mặn mòi' thành công!");
+                    }} className="w-full py-5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-2xl text-sm font-black tracking-widest shadow-xl transition-all active:scale-95">
+                    SAO CHÉP TOÀN BỘ BÀI VIẾT
+                  </button>
+                </div>
+              ) : (
+                 <div className="h-48 flex flex-col items-center justify-center opacity-10 text-center">
+                   <p className="text-[10px] font-black uppercase tracking-[0.6em]">Chưa có bài viết mới</p>
+                 </div>
               )}
             </div>
           </div>
-
-          <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100 min-h-[300px]">
-            <h2 className="text-lg font-bold text-slate-800 mb-5 flex items-center gap-2">
-              <span className="w-2 h-6 bg-emerald-500 rounded-full"></span>
-              Nội dung đề xuất
-            </h2>
-            {generatedContent ? (
-              <div className="space-y-5 animate-fadeIn">
-                <div className="bg-indigo-50/50 p-4 rounded-2xl border border-indigo-100">
-                  <p className="text-indigo-900 font-black text-lg leading-tight">{generatedContent.headline}</p>
-                </div>
-                <div className="text-slate-700 text-sm leading-relaxed whitespace-pre-line px-1">
-                  {generatedContent.body}
-                </div>
-                <div className="flex flex-wrap gap-2 pt-2 border-t border-slate-50">
-                  {generatedContent.hashtags.map((tag, i) => (
-                    <span key={i} className="text-xs font-bold text-indigo-600">#{tag}</span>
-                  ))}
-                </div>
-                <button 
-                  onClick={() => {
-                    const text = `${generatedContent.headline}\n\n${generatedContent.body}\n\n${generatedContent.hashtags.map(t => `#${t}`).join(' ')}`;
-                    navigator.clipboard.writeText(text);
-                    alert("Đã sao chép vào bộ nhớ tạm!");
-                  }}
-                  className="w-full py-3 mt-4 border-2 border-slate-100 rounded-xl text-slate-600 font-bold text-xs hover:bg-slate-50 transition-all flex items-center justify-center gap-2"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"></path></svg>
-                  SAO CHÉP BÀI VIẾT
-                </button>
-              </div>
-            ) : (
-              <div className="flex flex-col items-center justify-center py-20 text-slate-300">
-                <svg className="w-16 h-16 mb-4 opacity-10" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-1-13h2v6h-2zm0 8h2v2h-2z"></path></svg>
-                <p className="text-xs font-medium uppercase tracking-widest">Đang chờ dữ liệu...</p>
-              </div>
-            )}
-          </div>
-        </section>
+        </div>
       </main>
 
-      <footer className="fixed bottom-0 w-full bg-white/80 backdrop-blur-xl border-t border-slate-100 flex justify-around items-center md:hidden z-50 safe-bottom h-20">
-        <button className="p-3 text-indigo-600 flex flex-col items-center gap-1">
-          <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"></path></svg>
-          <span className="text-[10px] font-black uppercase">Home</span>
+      {/* Mobile Nav */}
+      <nav className={`fixed bottom-0 w-full h-20 backdrop-blur-3xl border-t flex lg:hidden justify-around items-center safe-bottom z-50 transition-all ${isDark ? 'bg-[#0a0a0a]/90 border-white/5' : 'bg-white/95 border-slate-200'}`}>
+        <button onClick={() => setActiveTab('home')} className={`p-4 text-[10px] font-black uppercase tracking-[0.2em] ${activeTab === 'home' ? 'text-indigo-500' : 'text-slate-400'}`}>HOME</button>
+        <button onClick={handleGenerate} className="w-16 h-16 bg-indigo-600 rounded-[2rem] flex items-center justify-center text-white -translate-y-8 shadow-2xl border-4 border-[#050505] active:scale-90 transition-transform">
+          <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 4v16m8-8H4"/></svg>
         </button>
-        <button 
-          onClick={handleGenerate}
-          className="bg-indigo-600 text-white w-14 h-14 rounded-full flex items-center justify-center shadow-lg shadow-indigo-200 -translate-y-6 border-4 border-slate-50 active:scale-90 transition-all"
-        >
-          <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4"></path></svg>
-        </button>
-        <button className="p-3 text-slate-400 flex flex-col items-center gap-1">
-          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>
-          <span className="text-[10px] font-black uppercase">Profile</span>
-        </button>
-      </footer>
+        <button onClick={() => setActiveTab('history')} className={`p-4 text-[10px] font-black uppercase tracking-[0.2em] ${activeTab === 'history' ? 'text-indigo-500' : 'text-slate-400'}`}>LỊCH SỬ</button>
+      </nav>
+
+      <input type="file" hidden ref={logoInputRef} onChange={e => handleFileChange(e, setLogoImage)} />
+      <input type="file" hidden ref={fileInputRef} onChange={e => handleFileChange(e, setProductImage)} />
+      <input type="file" hidden ref={bannerInputRef} onChange={(e) => handleFileChange(e, setBannerImage)} />
     </div>
   );
 };
