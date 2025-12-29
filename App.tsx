@@ -2,7 +2,27 @@
 import React, { useState, useRef } from 'react';
 import { CompanyInfo, AdContent } from './types';
 import { generateAdContent } from './services/geminiService';
-import { InputGroup } from './components/InputGroup';
+
+// InputGroup Component được định nghĩa trực tiếp tại đây để đảm bảo build không lỗi đường dẫn
+interface InputGroupProps {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+}
+
+const InputGroup: React.FC<InputGroupProps> = ({ label, value, onChange, placeholder }) => (
+  <div className="mb-4">
+    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5 ml-1">{label}</label>
+    <input
+      type="text"
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      placeholder={placeholder}
+      className="w-full px-5 py-3 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-2 focus:ring-indigo-500 focus:bg-white outline-none transition-all text-sm font-medium text-slate-800"
+    />
+  </div>
+);
 
 const App: React.FC = () => {
   const [bannerImage, setBannerImage] = useState<string | null>("https://images.unsplash.com/photo-1611162617474-5b21e879e113?q=80&w=1000&auto=format&fit=crop");
@@ -44,10 +64,10 @@ const App: React.FC = () => {
     try {
       const content = await generateAdContent(productImage, companyInfo);
       setGeneratedContent(content);
-      // Cuộn xuống kết quả trên mobile
       window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
     } catch (err) {
-      alert("Có lỗi xảy ra khi tạo nội dung. Vui lòng thử lại.");
+      console.error(err);
+      alert("Có lỗi xảy ra khi tạo nội dung. Vui lòng kiểm tra lại API_KEY!");
     } finally {
       setIsGenerating(false);
     }
@@ -55,7 +75,6 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col items-center pb-24">
-      {/* App Header/Banner - Tối ưu cho Notch iOS */}
       <div 
         className="relative w-full max-w-4xl h-56 sm:h-72 overflow-hidden rounded-b-[2.5rem] shadow-xl cursor-pointer group"
         onClick={() => bannerInputRef.current?.click()}
@@ -71,14 +90,10 @@ const App: React.FC = () => {
             <p className="text-indigo-200 font-medium opacity-90">AI Content Marketing Assistant</p>
           </div>
         </div>
-        <div className="absolute top-6 right-6 bg-white/20 backdrop-blur-md p-2 rounded-full opacity-0 group-hover:opacity-100 transition-opacity">
-          <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
-        </div>
         <input type="file" hidden ref={bannerInputRef} onChange={(e) => handleFileChange(e, setBannerImage)} accept="image/*" />
       </div>
 
       <main className="w-full max-w-4xl px-4 py-6 grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Configuration Section */}
         <section className="space-y-6">
           <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100">
             <h2 className="text-lg font-bold text-slate-800 mb-5 flex items-center gap-2">
@@ -182,7 +197,6 @@ const App: React.FC = () => {
           </button>
         </section>
 
-        {/* Preview Section */}
         <section className="space-y-6">
           <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100">
             <h2 className="text-lg font-bold text-slate-800 mb-5 flex items-center gap-2">
@@ -254,7 +268,6 @@ const App: React.FC = () => {
         </section>
       </main>
 
-      {/* Mobile Bar - Notch-aware */}
       <footer className="fixed bottom-0 w-full bg-white/80 backdrop-blur-xl border-t border-slate-100 flex justify-around items-center md:hidden z-50 safe-bottom h-20">
         <button className="p-3 text-indigo-600 flex flex-col items-center gap-1">
           <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"></path></svg>
